@@ -6,7 +6,7 @@ id = "kbtphRzjouArgXWqxAcRt"
 uri = "file://VIP-Hub-MAIN.zip"
 type = "unspecified"
 title = "VIP-Hub-MAIN.zip"
-description = "Final verified main project archive after clean deployment simulation, split-API fix, and root Vercel configuration."
+description = "Complete VIP Hub project ZIP containing the full source, assets, configuration, generated API files, production builds, deployment configs, and handoff documentation."
 
 [[outputs]]
 id = "8Wcbl8nPjT_-wtjqXlMsz"
