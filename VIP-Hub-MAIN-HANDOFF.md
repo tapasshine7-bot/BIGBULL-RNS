@@ -24,3 +24,5 @@
 
 - GitHub repository URL and authorization have not been provided, so no push was attempted.
 - If the API is deployed separately from the frontend, set `VITE_API_BASE_URL` in the hosting provider’s build environment. If frontend and API share a reverse-proxied origin, leave it empty.
+- For Vercel from the repository root, the included root `vercel.json` runs the locked pnpm install/build and serves `artifacts/rversed-bigbull/dist/public`.
+- For Cloudflare Pages, use build command `pnpm --filter @workspace/rversed-bigbull run build` and output directory `artifacts/rversed-bigbull/dist/public`; set `VITE_API_BASE_URL` to the API origin only when the API is hosted separately.

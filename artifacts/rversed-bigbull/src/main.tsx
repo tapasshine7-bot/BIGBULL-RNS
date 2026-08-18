@@ -14,7 +14,10 @@ if (configuredApiBaseUrl) {
     if (!['http:', 'https:'].includes(apiUrl.protocol)) {
       throw new Error('API base URL must use HTTP or HTTPS.');
     }
-    setBaseUrl(apiUrl.origin + apiUrl.pathname.replace(/\/+$/, ''));
+    // Generated API paths already include /api, so the override must stay an
+    // origin (for example https://api.example.com) rather than append a
+    // second /api prefix when the API is hosted separately.
+    setBaseUrl(apiUrl.origin);
   } catch (error) {
     console.error('Invalid VITE_API_BASE_URL; using same-origin API routes.', error);
   }

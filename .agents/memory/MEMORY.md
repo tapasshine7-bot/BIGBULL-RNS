@@ -1,1 +1,2 @@
 - [Partner availability checks](live-status-probing.md) — partner tool health is checked server-side because browser-side cross-origin probes are not reliable.
+- [Split-host API configuration](deployment-api-origin.md) — VITE_API_BASE_URL is an origin override; generated requests already include the /api path.

@@ -6,11 +6,11 @@ id = "kbtphRzjouArgXWqxAcRt"
 uri = "file://VIP-Hub-MAIN.zip"
 type = "unspecified"
 title = "VIP-Hub-MAIN.zip"
-description = "Complete VIP Hub main project archive with source, assets, configuration, generated API files, production builds, and the final handoff note."
+description = "Final verified main project archive after clean deployment simulation, split-API fix, and root Vercel configuration."
 
 [[outputs]]
 id = "8Wcbl8nPjT_-wtjqXlMsz"
 uri = "file://VIP-Hub-MAIN-HANDOFF.md"
 type = "text"
 title = "VIP Hub Main Handoff"
-description = "Short handoff describing completed repairs, verification results, deployment configuration, and the only remaining GitHub step."
+description = "Updated deployment handoff with Vercel and Cloudflare Pages settings."
