@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "RVRSED BIGBULL"
+description = "A fast, production-ready public gaming portal with a free VIP Hub, free Bio Tool access, partner gaming tools, public activity, and live tool status."
+version = "1.0.0"
+id = "artifacts/rversed-bigbull"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20651
+
+[services.development]
+run = "pnpm --filter @workspace/rversed-bigbull run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rversed-bigbull", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rversed-bigbull/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20651"
+BASE_PATH = "/"

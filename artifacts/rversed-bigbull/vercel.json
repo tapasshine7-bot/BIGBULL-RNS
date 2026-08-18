@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/gateway", "destination": "/index.html" },
+    { "source": "/vip", "destination": "/index.html" },
+    { "source": "/bio", "destination": "/index.html" },
+    { "source": "/activity", "destination": "/index.html" }
+  ]
+}

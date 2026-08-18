@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: portal
+    description: Public VIP Hub data
 paths:
   /healthz:
     get:
@@ -24,6 +26,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /gateway:
+    get:
+      operationId: getGateway
+      tags: [portal]
+      summary: Get the public player gateway
+      responses:
+        "200":
+          description: Gateway data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gateway"
+  /vip:
+    get:
+      operationId: getVipHub
+      tags: [portal]
+      summary: Get the free public VIP Hub
+      responses:
+        "200":
+          description: VIP Hub data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gateway"
+  /bio:
+    get:
+      operationId: getBioTool
+      tags: [portal]
+      summary: Get the free Bio Tool
+      responses:
+        "200":
+          description: Bio Tool data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerTool"
+  /live-status:
+    get:
+      operationId: getLiveStatus
+      tags: [portal]
+      summary: Check live partner tool availability
+      description: Probes every registered partner tool from the API server and returns the latest status and latency.
+      responses:
+        "200":
+          description: Live partner tool status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveStatusResponse"
+  /activity:
+    get:
+      operationId: getActivity
+      tags: [portal]
+      summary: Get recent public activity
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityLog"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +98,102 @@ components:
           type: string
       required:
         - status
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        joinedAt:
+          type: string
+        activityCount:
+          type: number
+        vipAccess:
+          type: boolean
+      required: [id, displayName, joinedAt, activityCount, vipAccess]
+    PartnerTool:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [online, checking, warning, offline]
+        category:
+          type: string
+        isFree:
+          type: boolean
+      required: [id, name, url, description, status, category, isFree]
+    LiveToolStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        status:
+          type: string
+          enum: [online, checking, warning, offline]
+        latencyMs:
+          type: number
+        detail:
+          type: string
+      required: [id, name, url, status, latencyMs, detail]
+    LiveStatusResponse:
+      type: object
+      properties:
+        checkedAt:
+          type: string
+        statuses:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveToolStatus"
+      required: [checkedAt, statuses]
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: string
+        action:
+          type: string
+        detail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, action, detail, createdAt]
+    GatewayStats:
+      type: object
+      properties:
+        totalTools:
+          type: number
+        onlineTools:
+          type: number
+        activeSessions:
+          type: number
+      required: [totalTools, onlineTools, activeSessions]
+    Gateway:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserProfile"
+        stats:
+          $ref: "#/components/schemas/GatewayStats"
+        tools:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartnerTool"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLog"
+      required: [user, stats, tools, recentActivity]
 

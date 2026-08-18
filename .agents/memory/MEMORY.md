@@ -1,0 +1,1 @@
+- [Partner availability checks](live-status-probing.md) — partner tool health is checked server-side because browser-side cross-origin probes are not reliable.

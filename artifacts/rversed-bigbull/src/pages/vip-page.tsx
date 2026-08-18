@@ -1,0 +1,15 @@
+import { ArrowUpRight, ExternalLink, Gift, Globe2 } from 'lucide-react';
+import { getGetVipHubQueryKey, useGetVipHub } from '@workspace/api-client-react';
+import { PageHeading, QueryError, QueryLoading, EmptyState } from '@/components/page-kit';
+import { StatusPill } from '@/components/status-pill';
+
+export function VipPage() {
+  const query = useGetVipHub({ query: { queryKey: getGetVipHubQueryKey() } });
+  if (query.isLoading) return <QueryLoading label="LOADING VIP HUB NODES" />;
+  if (query.isError || !query.data) return <QueryError onRetry={() => query.refetch()} label="VIP Hub unavailable." />;
+  const tools = query.data.tools;
+  return <div className="route-in"><PageHeading eyebrow="Free partner network / all nodes" title="VIP Hub." detail="Every partner tool, one clean launch surface. Check the live status, then open the tool in a new tab." action={<div className="text-mono border border-primary/30 bg-primary/10 px-3 py-2 text-[10px] uppercase tracking-wider text-primary">{tools.length} nodes available</div>} />
+    {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : <div className="grid gap-3 md:grid-cols-2">{tools.map((tool, index) => <article key={tool.id} className={`group relative overflow-hidden border border-border bg-card p-6 panel-edge transition hover:-translate-y-1 hover:border-primary/45 ${index === 0 ? 'md:row-span-2 md:p-8' : ''}`}><div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 border border-primary/10 transition group-hover:scale-125" /><div className="relative flex h-full flex-col"><div className="flex items-start justify-between"><div className="grid h-11 w-11 place-items-center border border-border bg-secondary text-primary">{index === 0 ? <Globe2 size={19} /> : <Gift size={19} />}</div><StatusPill status={tool.status} /></div><div className="mt-8 flex-1"><div className="text-mono mb-2 text-[9px] uppercase tracking-[.2em] text-muted-foreground">Node {String(index + 1).padStart(2, '0')} / {tool.category}</div><h2 className="text-display text-3xl uppercase tracking-wider">{tool.name}</h2><p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{tool.description}</p></div><div className="mt-8 flex items-center justify-between border-t border-border pt-4"><div className="text-mono max-w-[190px] truncate text-[9px] text-muted-foreground">{tool.url}</div><a href={tool.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:translate-y-px" data-testid={`button-launch-${tool.id}`}><span>Launch</span><ArrowUpRight size={14} /></a></div></div></article>)}</div>}
+    <div className="mt-8 flex items-center gap-3 text-xs text-muted-foreground"><ExternalLink size={14} className="text-accent" /> Partner tools open outside the gateway. The gateway remains available here.</div>
+  </div>;
+}

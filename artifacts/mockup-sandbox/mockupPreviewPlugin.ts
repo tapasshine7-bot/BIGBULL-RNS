@@ -156,7 +156,7 @@ export function mockupPreviewPlugin(): Plugin {
       });
 
       viteServer.middlewares.use((req, res, next) => {
-        const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+        const requestUrl = new URL(req.url ?? "/", "https://vip-hub.invalid");
         const pathname = requestUrl.pathname;
         const originalEnd = res.end.bind(res);
 

@@ -1,15 +1,14 @@
-# [Project name]
+# VIP Hub
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+RVRSED BIGBULL is a public player gateway for launching free partner tools, checking live tool status, and viewing the shared activity ledger.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm --filter @workspace/rversed-bigbull run dev` — run the VIP Hub web app
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
+- `pnpm run build` — typecheck + production-build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
@@ -22,23 +21,34 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/rversed-bigbull/src/pages/startup-page.tsx` — terminal/intro sequence
+- `artifacts/rversed-bigbull/src/App.tsx` — client routes and shared providers
+- `artifacts/rversed-bigbull/src/index.css` — visual system, animations, and responsive dashboard styling
+- `artifacts/api-server/src/routes/portal.ts` — public portal API endpoints
+- `artifacts/api-server/src/lib/portal.ts` — partner registry and public activity data
+- `lib/api-spec/openapi.yaml` — source-of-truth API contract
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The intro sequence remains the first screen, then routes directly to `/gateway` with public access.
+- Portal endpoints are public and use same-origin `/api` paths so the web app works behind the Replit proxy and on standard static hosting with a routed API.
+- If the API is hosted separately, set the frontend build variable `VITE_API_BASE_URL` to the API origin; otherwise leave it unset for same-origin routing.
+- SPA fallback files are included for the main client routes so direct navigation works on Cloudflare Pages, Vercel, and similar static hosts.
+- Partner tools and the public activity ledger are read-only service data; the API does not require a database connection just to boot the public hub.
+- The OpenAPI document is the API source of truth; generated client and validation files must be refreshed after contract changes.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users see the animated startup terminal, enter the public gateway automatically, launch the Bio Tool or VIP Hub, inspect partner status, and browse profile/activity views without creating an account.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Preserve the existing terminal, dashboard, animations, styling, assets, and working navigation unless a requested repair requires a targeted change.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run API codegen after editing `lib/api-spec/openapi.yaml`.
+- Web requests use relative `/api/...` paths; do not add hardcoded development hosts.
 
 ## Pointers
 
