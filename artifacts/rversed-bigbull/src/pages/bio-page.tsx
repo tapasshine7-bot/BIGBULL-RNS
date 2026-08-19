@@ -4,9 +4,31 @@ import { getGetBioToolQueryKey, useGetBioTool } from '@workspace/api-client-reac
 import { PageHeading, QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 
+import { useEffect } from 'react';
+import { fetchBannerState } from '@/lib/admin';
+import type { AdminMaintenance } from '@/lib/admin';
+
+function MaintenanceScreen({ message }: { message: string }) {
+  return (
+    <div className="route-in mx-auto grid min-h-[70vh] max-w-[560px] place-items-center text-center">
+      <div className="border border-amber-300/50 bg-card/75 p-8">
+        <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode / Bio Tool</div>
+        <h2 className="text-display text-xl font-bold uppercase tracking-wider">Bio Tool is temporarily offline</h2>
+        <p className="mt-4 text-sm leading-6 text-muted-foreground">{message || 'We are performing scheduled maintenance. It will be back shortly.'}</p>
+        <p className="mt-3 text-xs text-muted-foreground/80">The VIP Hub and the rest of the network are working normally.</p>
+      </div>
+    </div>
+  );
+}
+
 export function BioPage() {
   const query = useGetBioTool({ query: { queryKey: getGetBioToolQueryKey() } });
   const [copied, setCopied] = useState(false);
+  const [maintenance, setMaintenance] = useState<AdminMaintenance>(null);
+  useEffect(() => {
+    void fetchBannerState().then((state) => setMaintenance(state.maintenance));
+  }, []);
+  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'bio')) return <MaintenanceScreen message={maintenance.message} />;
   if (query.isLoading) return <QueryLoading label="CHECKING BIO TOOL NODE" />;
   if (query.isError || !query.data) return <QueryError onRetry={() => query.refetch()} label="Bio Tool unavailable." />;
   const tool = query.data;

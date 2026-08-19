@@ -220,9 +220,12 @@ interface BannerState {
   expiresAt: string | null;
 }
 
+type MaintenanceScope = "both" | "bio" | "vip";
+
 interface MaintenanceState {
   enabled: boolean;
   message: string;
+  scope: MaintenanceScope;
 }
 
 async function readBanner(db: D1Database): Promise<BannerState | null> {
@@ -239,11 +242,13 @@ async function readBanner(db: D1Database): Promise<BannerState | null> {
 
 async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
   const row = await db.prepare("SELECT value FROM site_config WHERE key = 'maintenance_mode'").first<{ value: string }>();
-  if (!row) return { enabled: false, message: "" };
+  if (!row) return { enabled: false, message: "", scope: "both" };
   try {
-    return { enabled: false, message: "", ...(JSON.parse(row.value) as Partial<MaintenanceState>) };
+    const parsed = JSON.parse(row.value) as Partial<MaintenanceState>;
+    const scope: MaintenanceScope = parsed.scope === "bio" || parsed.scope === "vip" ? parsed.scope : "both";
+    return { enabled: Boolean(parsed.enabled), message: String(parsed.message ?? ""), scope };
   } catch {
-    return { enabled: false, message: "" };
+    return { enabled: false, message: "", scope: "both" };
   }
 }
 
@@ -503,13 +508,18 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     // POST /api/admin/maintenance/toggle
     if (path === "/maintenance/toggle" && request.method === "POST") {
       const body = await request.json().catch(() => null);
-      const b = (body ?? {}) as { enabled?: unknown; message?: unknown };
-      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? "") };
+      const b = (body ?? {}) as { enabled?: unknown; message?: unknown; scope?: unknown };
+      const scope: MaintenanceScope =
+        b.scope === "bio" || b.scope === "vip" ? (b.scope as MaintenanceScope) : "both";
+      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope };
       await writeConfig(db, "maintenance_mode", state);
       await audit(db, "Tapas123", "maintenance.toggle", "maintenance", state, state.enabled ? "warning" : "info");
+      const scopeLabel = state.scope === "bio" ? "Bio Tool" : state.scope === "vip" ? "VIP Hub" : "the whole site";
       await notify(
         db,
-        state.enabled ? "Maintenance mode is ON — visitors see the maintenance screen." : "Maintenance mode is OFF — site is live.",
+        state.enabled
+          ? `Maintenance mode is ON for ${scopeLabel} — visitors see the maintenance screen there.`
+          : "Maintenance mode is OFF — site is live.",
         state.enabled ? "warning" : "info",
       );
       return safeJson(200, { ok: true, ...state }, request);

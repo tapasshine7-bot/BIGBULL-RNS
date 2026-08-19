@@ -5,6 +5,7 @@ import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetL
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
 import { fetchBannerState } from '@/lib/admin';
+import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 
@@ -32,17 +33,23 @@ export function GatewayPage() {
   const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
   const [banner, setBanner] = useState<string | null>(null);
+  const [maintenance, setMaintenance] = useState<AdminMaintenance>(null);
 
   useEffect(() => {
     // Update banner strip without blocking the dashboard render.
     let cancelled = false;
     void fetchBannerState().then((state) => {
-      if (!cancelled && state.banner && state.banner.text) setBanner(state.banner.text);
+      if (cancelled) return;
+      if (state.banner && state.banner.text) setBanner(state.banner.text);
+      setMaintenance(state.maintenance);
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Scoped maintenance message for the dashboard banner strip (bio/vip/both).
+  const maintenanceBanner = maintenance?.enabled && maintenance.message ? maintenance.message : null;
 
   if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />; // install hooks must come before early returns
   if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
@@ -50,10 +57,10 @@ export function GatewayPage() {
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
 
   return <div className="route-in dashboard-page">
-    {banner ? (
-      <div className="mx-auto mb-4 flex max-w-4xl items-center gap-2 border border-accent/50 bg-accent/10 px-3 py-2 text-mono text-[10px] uppercase tracking-[.16em] text-accent" data-testid="admin-banner-strip">
+    {(banner || maintenanceBanner) ? (
+      <div className="mx-auto mb-4 flex max-w-4xl items-center gap-2 border border-amber-300/50 bg-amber-300/10 px-3 py-2 text-mono text-[10px] uppercase tracking-[.16em] text-amber-300" data-testid="admin-banner-strip">
         <Megaphone size={12} className="shrink-0" />
-        <span className="truncate">{banner}</span>
+        <span className="truncate">{maintenanceBanner ?? banner}</span>
       </div>
     ) : null}
     <header className="dashboard-topbar">

@@ -1,16 +1,32 @@
 // Hidden admin console API client (no workspace package dependency).
-// Uses the same API origin configured for the rest of the app.
+// Admin calls always use the SAME origin as the website (/api/admin/...) so
+// mobile networks and security filters never treat them as cross-origin.
+// The legacy workers.dev API host is only used when the environment variable
+// explicitly forces a different host via `?api=workers` for self-testing.
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-  ? new URL((import.meta.env.VITE_API_BASE_URL as string).trim(), window.location.origin).origin
-  : window.location.origin;
+const PRODUCTION_HOSTS = ['rnsbigbull.site', 'rnsbigbull-site.pages.dev'];
+
+function isProductionHost(): boolean {
+  return PRODUCTION_HOSTS.some((host) => window.location.hostname === host || window.location.hostname.endsWith(`.${host}`));
+}
+
+function getAdminApiOrigin(): string {
+  if (!isProductionHost()) {
+    const configured = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+    if (configured) {
+      return new URL(configured, window.location.origin).origin;
+    }
+  }
+  return window.location.origin;
+}
 
 export function getApiBaseUrl(): string {
-  return API_BASE;
+  return getAdminApiOrigin();
 }
 
 export type AdminBanner = { text: string; expiresAt: string | null } | null;
-export type AdminMaintenance = { enabled: boolean; message: string };
+export type MaintenanceScope = 'both' | 'bio' | 'vip';
+export type AdminMaintenance = { enabled: boolean; message: string; scope: MaintenanceScope | null } | null;
 
 interface AdminSession {
   token: string | null;
@@ -88,9 +104,9 @@ export async function fetchBannerState(): Promise<{ banner: AdminBanner; mainten
     const response = await fetch(bannerApiPath());
     if (!response.ok) throw new Error('network');
     const data = (await response.json()) as { banner?: AdminBanner; maintenance?: AdminMaintenance };
-    return { banner: data.banner ?? null, maintenance: data.maintenance ?? { enabled: false, message: '' } };
+    return { banner: data.banner ?? null, maintenance: data.maintenance ?? { enabled: false, message: '', scope: null } };
   } catch {
-    return { banner: null, maintenance: { enabled: false, message: '' } };
+    return { banner: null, maintenance: { enabled: false, message: '', scope: null } };
   }
 }
 
@@ -145,10 +161,10 @@ export async function adminGetMaintenance() {
   return adminFetch<AdminMaintenance>('/maintenance');
 }
 
-export async function adminToggleMaintenance(enabled: boolean, message: string) {
-  return adminFetch<{ ok: boolean; enabled: boolean; message: string }>('/maintenance/toggle', {
+export async function adminToggleMaintenance(enabled: boolean, message: string, scope: MaintenanceScope = 'both') {
+  return adminFetch<{ ok: boolean; enabled: boolean; message: string; scope: MaintenanceScope }>('/maintenance/toggle', {
     method: 'POST',
-    body: JSON.stringify({ enabled, message }),
+    body: JSON.stringify({ enabled, message, scope }),
   });
 }
 

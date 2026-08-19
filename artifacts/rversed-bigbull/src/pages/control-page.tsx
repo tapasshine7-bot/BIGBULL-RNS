@@ -78,7 +78,8 @@ export function ControlPage() {
   const [bannerText, setBannerText] = useState('');
   const [bannerTtl, setBannerTtl] = useState('24');
 
-  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string }>({ enabled: false, message: '' });
+  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string; scope: 'both' | 'bio' | 'vip' }>({ enabled: false, message: '', scope: 'both' });
+  const [maintenanceScope, setMaintenanceScope] = useState<'both' | 'bio' | 'vip'>('both');
   const [overview, setOverview] = useState<{ total: number; green: number; yellow: number; red: number; openIncidents: number; averageUptime: number } | null>(null);
   const [monitors, setMonitors] = useState<Array<{ id: number; name: string; url: string; enabled: number; latest: { status: string; latency_ms: number | null; status_code: number | null; error: string | null; checked_at: string } | null }>>([]);
   const [incidents, setIncidents] = useState<Array<{ id: number; title: string; severity: string; status: string; note: string | null; created_at: string; resolved_at: string | null }>>([]);
@@ -167,10 +168,12 @@ export function ControlPage() {
   async function toggleMaintenance(next: boolean) {
     setBusyAction('maintenance');
     try {
-      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''));
+      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''), maintenanceScope);
       if (result && (result as { ok?: boolean }).ok) {
-        setMaintenance({ enabled: next, message: result.message ?? maintenance.message });
-        flash(next ? 'Maintenance mode is ON — visitors see the maintenance screen.' : 'Maintenance mode is OFF — site is live.');
+        const updated = { enabled: next, message: (result as { message?: string }).message ?? maintenance.message, scope: (result as { scope?: 'both' | 'bio' | 'vip' }).scope ?? maintenanceScope };
+        setMaintenance(updated);
+        const scopeName = updated.scope === 'bio' ? 'Bio Tool' : updated.scope === 'vip' ? 'VIP Hub' : 'the whole site';
+        flash(next ? `Maintenance mode is ON for ${scopeName}.` : 'Maintenance mode is OFF — site is live.');
       }
     } catch {
       flash('Could not update maintenance mode.');
@@ -404,6 +407,8 @@ export function ControlPage() {
           )}
           {tab === 'broadcast' && (
             <BroadcastTab
+              maintenanceScope={maintenanceScope}
+              onScopeChange={setMaintenanceScope}
               bannerText={bannerText}
               setBannerText={setBannerText}
               bannerTtl={bannerTtl}
@@ -447,7 +452,9 @@ function StatBlock({ label, value, tone = 'foreground' }: { label: string; value
   );
 }
 
-function OverviewTab({ overview, onSweep, busy }: { overview: typeof null extends infer O ? O : never; onSweep: () => void; busy: boolean }) {
+type OverviewData = { total: number; green: number; yellow: number; red: number; openIncidents: number; averageUptime: number } | null;
+
+function OverviewTab({ overview, onSweep, busy }: { overview: OverviewData; onSweep: () => void; busy?: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -485,7 +492,7 @@ function statusTone(status: string | null) {
   return status === 'green' ? 'text-accent' : status === 'yellow' ? 'text-amber-300' : status === 'red' ? 'text-red-300' : 'text-muted-foreground';
 }
 
-function MonitorsTab({ monitors, onSweep, busy }: { monitors: Array<Record<string, unknown>>; onSweep: () => void; busy: boolean }) {
+function MonitorsTab({ monitors, onSweep, busy }: { monitors: Array<Record<string, unknown>>; onSweep: () => void; busy?: boolean }) {
   return (
     <div className="space-y-4">
       <button
@@ -550,7 +557,7 @@ function IncidentsTab({
   incidents: Array<Record<string, unknown>>;
   onCreate: () => void;
   onResolve: (id: number) => void;
-  busy: boolean;
+  busy?: boolean;
   title: string;
   setTitle: (value: string) => void;
 }) {
@@ -625,6 +632,8 @@ function BroadcastTab({
   onMessageChange,
   busyBanner,
   busyMaintenance,
+  maintenanceScope,
+  onScopeChange,
 }: {
   bannerText: string;
   setBannerText: (value: string) => void;
@@ -637,6 +646,8 @@ function BroadcastTab({
   onMessageChange: (message: string) => void;
   busyBanner: boolean;
   busyMaintenance: boolean;
+  maintenanceScope: 'both' | 'bio' | 'vip';
+  onScopeChange: (scope: 'both' | 'bio' | 'vip') => void;
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -693,7 +704,26 @@ function BroadcastTab({
         <div className="mb-3 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
           <Wrench size={13} className="text-amber-300" /> Maintenance mode
         </div>
-        <label className="text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Message shown to visitors</label>
+        <label className="text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Which dashboard</label>
+        <div className="mt-1.5 flex gap-1.5">
+          {(['both', 'bio', 'vip'] as const).map((scope) => (
+            <button
+              key={scope}
+              type="button"
+              onClick={() => onScopeChange(scope)}
+              disabled={busyMaintenance}
+              className={`border px-2.5 py-1 text-mono text-[8px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
+                maintenanceScope === scope
+                  ? 'border-accent/60 bg-accent/15 text-accent'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+              data-testid={`button-scope-${scope}`}
+            >
+              {scope === 'both' ? 'Both (whole site)' : scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
+            </button>
+          ))}
+        </div>
+        <label className="mt-3 text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Message shown to visitors</label>
         <textarea
           value={maintenance.message}
           onChange={(event) => onMessageChange(event.target.value)}
@@ -718,7 +748,9 @@ function BroadcastTab({
           </button>
         </div>
         <div className="mt-4 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
-          While ON, every visitor sees only the maintenance screen until you switch it off.
+          {maintenanceScope === 'both'
+            ? 'While ON, every visitor sees only the maintenance screen until you switch it off.'
+            : `While ON, only the ${maintenanceScope === 'bio' ? 'Bio Tool' : 'VIP Hub'} shows the maintenance screen — the other dashboard keeps working.`}
         </div>
       </div>
     </div>
@@ -797,7 +829,9 @@ function AuditTab({ audit }: { audit: Array<Record<string, unknown>> }) {
   );
 }
 
-function SummaryTab({ summary }: { summary: typeof null extends infer O ? O : never }) {
+type SummaryData = { checksLast24h: number; failuresLast24h: number; incidentsLast24h: number; adminActionsLast24h: number } | null;
+
+function SummaryTab({ summary }: { summary: SummaryData }) {
   return summary ? (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <StatBlock label="Checks (24h)" value={String(summary.checksLast24h)} />
