@@ -10,6 +10,7 @@ import { GatewayPage } from '@/pages/gateway-page';
 import { VipPage } from '@/pages/vip-page';
 import { BioPage } from '@/pages/bio-page';
 import { ActivityPage } from '@/pages/activity-page';
+import { PoliciesPage } from '@/pages/policies-page';
 import {
   Route,
   Switch,
@@ -30,6 +31,7 @@ function Router() {
         <Route path="/vip"><AppShell><VipPage /></AppShell></Route>
         <Route path="/bio"><AppShell><BioPage /></AppShell></Route>
         <Route path="/activity"><AppShell><ActivityPage /></AppShell></Route>
+        <Route path="/policies"><AppShell><PoliciesPage /></AppShell></Route>
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
