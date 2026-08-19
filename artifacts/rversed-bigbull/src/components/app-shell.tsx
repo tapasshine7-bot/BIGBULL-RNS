@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Boxes, ChevronRight, History, Headphones, Radio, Sparkles } from 'lucide-react';
+import { Boxes, ChevronRight, History, Headphones, Radio, Sparkles, Download } from 'lucide-react';
+import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { BrandMark } from '@/components/brand-mark';
 
 const nav = [
@@ -45,8 +46,27 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-5 py-4 backdrop-blur md:hidden">
         <BrandMark compact />
         <span className="text-mono text-[10px] text-accent">{accessLabel}</span>
+        <InstallButton />
       </header>
       <main className="min-h-[100dvh] px-5 py-7 md:ml-[246px] md:px-10 md:py-10 lg:px-14">{children}</main>
     </div>
+  );
+}
+
+/** Small Install App button shown in the mobile topbar while the site is installable. */
+export function InstallButton() {
+  const install = useInstallPrompt();
+  const standalone = useIsStandalone();
+  if (install === null || standalone) return null;
+  return (
+    <button
+      type="button"
+      onClick={install}
+      data-testid="button-install-app"
+      className="flex items-center gap-1.5 border border-primary/40 bg-primary/10 px-3 py-1.5 text-mono text-[10px] uppercase tracking-[.14em] text-primary transition active:bg-primary/20"
+    >
+      <Download size={12} strokeWidth={1.8} />
+      <span>Install App</span>
+    </button>
   );
 }
