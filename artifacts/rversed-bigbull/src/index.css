@@ -589,3 +589,18 @@
   .dashboard-vip-art { width: 86px; height: 86px; font-size: 5rem; }
   .dashboard-panel, .dashboard-vip-tools { padding: .8rem; }
 }
+
+/* Install-as-app section below the dashboard cards */
+.dashboard-install-section { border: 1px solid hsl(var(--border)); background: rgba(17, 23, 34, .8); padding: 1rem 1.2rem; box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 12px 26px rgba(0,0,0,.15); }
+.dashboard-install-inner { display: flex; align-items: center; justify-content: space-between; gap: 1.2rem; }
+.dashboard-install-label { display: flex; align-items: center; gap: .45rem; font-family: var(--app-font-mono); font-size: .63rem; text-transform: uppercase; letter-spacing: .18em; color: hsl(var(--primary)); margin-bottom: .4rem; }
+.dashboard-install-desc { font-size: .8rem; color: hsl(var(--muted-foreground)); max-width: 46ch; }
+.dashboard-install-row { margin-top: .9rem; display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; }
+.dashboard-action-install { color: #201700; background: linear-gradient(90deg, #ffbd13, #e99b00); cursor: pointer; }
+.dashboard-install-steps { font-size: .72rem; color: hsl(var(--muted-foreground)); display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.dashboard-install-steps b { color: hsl(var(--foreground)); }
+.dashboard-install-sep { opacity: .5; }
+.dashboard-install-art { display: none; }
+@media (min-width: 640px) {
+  .dashboard-install-art { display: block; font-size: 2.4rem; opacity: .85; }
+}

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Atom, Check, LoaderCircle } from 'lucide-react';
+import { Atom, Check, Download, LoaderCircle, Smartphone } from 'lucide-react';
+import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
 import { QueryError, QueryLoading } from '@/components/page-kit';
@@ -29,7 +30,7 @@ export function GatewayPage() {
   const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
 
-  if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />;
+  if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />; // install hooks must come before early returns
   if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
 
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
@@ -63,6 +64,17 @@ export function GatewayPage() {
       </article>
     </section>
 
+    <section className="dashboard-install-section" aria-label="Install app">
+      <div className="dashboard-install-inner">
+        <div>
+          <div className="dashboard-install-label"><Smartphone size={13} strokeWidth={1.8} /><span>Install as app</span></div>
+          <p className="dashboard-install-desc">Add RVRSED BIGBULL to your home screen and open it like a real app — full screen, no browser bar.</p>
+          <InstallAppRow />
+        </div>
+        <div className="dashboard-install-art" aria-hidden="true"><span>♛</span></div>
+      </div>
+    </section>
+
     <section className="dashboard-lower-grid">
       <article className="dashboard-panel">
         <div className="dashboard-panel-heading"><div><div className="dashboard-section-label">Live tools status</div><h2>Live tools</h2></div><div className="dashboard-online-count"><span /> {onlineTools} online</div></div>
@@ -81,4 +93,34 @@ export function GatewayPage() {
     </section>
 
   </div>;
+}
+
+/** One-line install row: native button when available, else a copy-the-steps card. */
+function InstallAppRow() {
+  const install = useInstallPrompt();
+  const standalone = useIsStandalone();
+
+  if (standalone) return null;
+
+  return (
+    <div className="dashboard-install-row">
+      {install ? (
+        <button
+          type="button"
+          onClick={install}
+          data-testid="button-install-app"
+          className="dashboard-action dashboard-action-install"
+        >
+          <span><Download size={13} strokeWidth={1.8} className="align-middle" /> Install app</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      ) : (
+        <div className="dashboard-install-steps" data-testid="text-install-steps">
+          <span><Download size={13} strokeWidth={1.8} className="align-middle" /> Add to home screen</span>
+          <span className="dashboard-install-sep">•</span>
+          <span>Menu (⋮) → <b>Site controls</b> → <b>Add to Home screen</b>, or <b>Share…</b> → <b>Add to Home screen</b></span>
+        </div>
+      )}
+    </div>
+  );
 }
