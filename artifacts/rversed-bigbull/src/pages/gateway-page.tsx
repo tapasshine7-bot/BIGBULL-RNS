@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
-import { Atom, Check, Download, LoaderCircle, Smartphone } from 'lucide-react';
+import { Atom, Check, Download, LoaderCircle, Megaphone, Smartphone } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
+import { useEffect, useState } from 'react';
+import { fetchBannerState } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 
@@ -29,6 +31,18 @@ export function GatewayPage() {
   );
   const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
+  const [banner, setBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Update banner strip without blocking the dashboard render.
+    let cancelled = false;
+    void fetchBannerState().then((state) => {
+      if (!cancelled && state.banner && state.banner.text) setBanner(state.banner.text);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />; // install hooks must come before early returns
   if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
@@ -36,6 +50,12 @@ export function GatewayPage() {
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
 
   return <div className="route-in dashboard-page">
+    {banner ? (
+      <div className="mx-auto mb-4 flex max-w-4xl items-center gap-2 border border-accent/50 bg-accent/10 px-3 py-2 text-mono text-[10px] uppercase tracking-[.16em] text-accent" data-testid="admin-banner-strip">
+        <Megaphone size={12} className="shrink-0" />
+        <span className="truncate">{banner}</span>
+      </div>
+    ) : null}
     <header className="dashboard-topbar">
       <div>
         <div className="dashboard-kicker">Player control center</div>

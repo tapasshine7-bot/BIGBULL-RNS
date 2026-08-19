@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
-import { Check, Radio } from 'lucide-react';
+import { Check, Radio, Wrench } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
+import { fetchBannerState } from '@/lib/admin';
 
 const stages = [
   'ENGINE STARTING...',
@@ -15,8 +16,16 @@ const stages = [
 export function StartupPage() {
   const [, setLocation] = useLocation();
   const [stage, setStage] = useState(0);
+  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
 
   useEffect(() => {
+    // Never block the boot animation: maintenance is checked in the background.
+    void fetchBannerState().then((state) => setMaintenance(state.maintenance));
+  }, []);
+
+  useEffect(() => {
+    // If maintenance is confirmed ON, stay on this screen instead of booting.
+    if (maintenance?.enabled) return;
     const timer = window.setInterval(() => {
       setStage((current) => {
         if (current >= stages.length - 1) {
@@ -29,7 +38,42 @@ export function StartupPage() {
     }, 260);
 
     return () => window.clearInterval(timer);
-  }, [setLocation]);
+  }, [setLocation, maintenance]);
+
+  if (maintenance?.enabled) {
+    return (
+      <div className="grid min-h-[100dvh] place-items-center overflow-hidden bg-[#0b0e15] px-5 text-foreground">
+        <div className="grid-surface absolute inset-0 opacity-40" />
+        <div className="relative w-full max-w-[520px] text-center">
+          <div className="mb-10 flex items-center justify-between">
+            <BrandMark />
+            <div className="text-mono text-right text-[9px] uppercase tracking-[.22em] text-muted-foreground">
+              <div>SECURE PLAYER NETWORK</div>
+              <div className="mt-1 text-amber-300">NODE 07 / STANDBY</div>
+            </div>
+          </div>
+          <div className="border border-border bg-card/75 p-6 panel-edge sm:p-8">
+            <div className="mx-auto mb-5 grid h-14 w-14 place-items-center border border-amber-300/50 text-amber-300">
+              <Wrench size={24} strokeWidth={1} className="signal-pulse" />
+            </div>
+            <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode</div>
+            <h1 className="text-display text-2xl font-bold uppercase tracking-wider">Temporarily offline</h1>
+            <p className="mt-4 text-sm leading-6 text-muted-foreground">
+              {maintenance.message || 'We are performing scheduled maintenance. The network will be back shortly.'}
+            </p>
+            <div className="mt-7 flex items-center gap-2 justify-center text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-300 signal-pulse" />
+              Checking every few seconds…
+            </div>
+          </div>
+          <div className="mt-5 flex justify-between text-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+            <span>Live monitor / standby</span>
+            <span>Build 2.4.7</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-[100dvh] place-items-center overflow-hidden bg-[#0b0e15] px-5 text-foreground">

@@ -1,5 +1,7 @@
 // RNS BIGBULL public portal Worker.
-// All endpoints are open (no authentication, no payment system).
+// Public endpoints are open (no payment system). Admin endpoints live under /api/admin.
+
+import { handleAdmin, handleBanner } from "./admin";
 
 export interface Env {
   db: D1Database;
@@ -166,6 +168,8 @@ export default {
       if (path === "/bio") return corsResponse(await handleBio(env.db), request);
       if (path === "/live-status") return corsResponse(await handleLiveStatus(env.db), request);
       if (path === "/activity") return corsResponse(await handleActivity(), request);
+      if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
+      if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });
     } catch (error) {
       const message = (error as { message?: string }).message ?? "Internal error";
