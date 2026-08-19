@@ -1,11 +1,10 @@
 import { useMemo } from 'react';
-import { Atom, BriefcaseBusiness, Check, Gift, Heart, Rocket, Smile, Trophy, UsersRound } from 'lucide-react';
+import { Atom, Check } from 'lucide-react';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 
-const toolIcons = [UsersRound, Smile, Heart, Rocket, BriefcaseBusiness, Trophy, Gift];
 
 function formatClock(value: string) {
   const date = new Date(value);
@@ -23,7 +22,6 @@ export function GatewayPage() {
   });
   const gateway = query.data;
   const bioTool = gateway?.tools.find((tool) => tool.id === 'bio');
-  const partnerTools = useMemo(() => gateway?.tools.filter((tool) => tool.id !== 'bio') ?? [], [gateway?.tools]);
   const liveTools = useMemo(
     () => liveStatusQuery.data?.statuses.filter((tool) => tool.id !== 'bio').slice(0, 4) ?? [],
     [liveStatusQuery.data?.statuses],
@@ -80,14 +78,5 @@ export function GatewayPage() {
       </article>
     </section>
 
-    <section className="dashboard-vip-tools">
-      <div className="dashboard-panel-heading"><div><div className="dashboard-section-label">Free partner access</div><h2>VIP Hub tools</h2></div><Link href="/vip" className="dashboard-view-all">Open Hub →</Link></div>
-      <div className="vip-tool-strip">
-        {partnerTools.map((tool, index) => {
-          const Icon = toolIcons[index % toolIcons.length];
-          return <a key={tool.id} href={tool.url} target="_blank" rel="noreferrer" className="vip-tool-tile" data-testid={`dashboard-vip-${tool.id}`}><div className="vip-tool-icon"><Icon size={20} strokeWidth={1.6} /></div><div className="vip-tool-name">{tool.name}</div><div className="vip-tool-launch">Launch <span>→</span></div></a>;
-        })}
-      </div>
-    </section>
   </div>;
 }

@@ -68,6 +68,50 @@ export interface ActivityLog {
   createdAt: string;
 }
 
+export interface AuthInput {
+  /**
+     * @minLength 3
+     * @maxLength 24
+     */
+  username: string;
+  /**
+     * @minLength 6
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface SessionUser {
+  id: string;
+  username: string;
+  displayName: string;
+  joinedAt: string;
+  vipAccess: boolean;
+  online: boolean;
+  lastSeenAt?: string;
+  activityCount: number;
+}
+
+export interface AuthResponse {
+  user: SessionUser;
+}
+
+export interface VipStatus {
+  vipAccess: boolean;
+  verifiedAt: string;
+}
+
+export interface VipPaymentInit {
+  paymentUrl: string;
+  paymentRequestId: string;
+  amount: number;
+  currency: string;
+}
+
+export interface ApiError {
+  error: string;
+}
+
 export interface GatewayStats {
   totalTools: number;
   onlineTools: number;

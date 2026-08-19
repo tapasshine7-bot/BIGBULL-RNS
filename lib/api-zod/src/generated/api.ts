@@ -128,3 +128,116 @@ export const GetActivityResponseItem = zod.object({
 export const GetActivityResponse = zod.array(GetActivityResponseItem)
 
 
+/**
+ * @summary Create a new account
+ */
+export const signupBodyUsernameMin = 3;
+export const signupBodyUsernameMax = 24;
+
+export const signupBodyPasswordMin = 6;
+export const signupBodyPasswordMax = 128;
+
+
+
+export const SignupBody = zod.object({
+  "username": zod.string().min(signupBodyUsernameMin).max(signupBodyUsernameMax),
+  "password": zod.string().min(signupBodyPasswordMin).max(signupBodyPasswordMax)
+})
+
+export const SignupResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "joinedAt": zod.string(),
+  "vipAccess": zod.boolean(),
+  "online": zod.boolean(),
+  "lastSeenAt": zod.string().optional(),
+  "activityCount": zod.number()
+})
+})
+
+
+/**
+ * @summary Sign in with existing credentials
+ */
+export const loginBodyUsernameMin = 3;
+export const loginBodyUsernameMax = 24;
+
+export const loginBodyPasswordMin = 6;
+export const loginBodyPasswordMax = 128;
+
+
+
+export const LoginBody = zod.object({
+  "username": zod.string().min(loginBodyUsernameMin).max(loginBodyUsernameMax),
+  "password": zod.string().min(loginBodyPasswordMin).max(loginBodyPasswordMax)
+})
+
+export const LoginResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "joinedAt": zod.string(),
+  "vipAccess": zod.boolean(),
+  "online": zod.boolean(),
+  "lastSeenAt": zod.string().optional(),
+  "activityCount": zod.number()
+})
+})
+
+
+/**
+ * @summary End the current session
+ */
+export const LogoutResponse = zod.unknown()
+
+
+/**
+ * @summary Current session user with verified VIP status
+ */
+export const GetMeResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "displayName": zod.string(),
+  "joinedAt": zod.string(),
+  "vipAccess": zod.boolean(),
+  "online": zod.boolean(),
+  "lastSeenAt": zod.string().optional(),
+  "activityCount": zod.number()
+})
+
+
+/**
+ * @summary Update last-seen for the active session
+ */
+export const HeartbeatResponse = zod.unknown()
+
+
+/**
+ * @summary Create a one-time INR 20 VIP payment request
+ */
+export const CreateVipPaymentResponse = zod.object({
+  "paymentUrl": zod.string(),
+  "paymentRequestId": zod.string(),
+  "amount": zod.number(),
+  "currency": zod.string()
+})
+
+
+/**
+ * @summary Server-verified VIP status for the current session
+ */
+export const GetVipStatusResponse = zod.object({
+  "vipAccess": zod.boolean(),
+  "verifiedAt": zod.string()
+})
+
+
+/**
+ * @summary Instamojo payment webhook receiver (server-side verification only)
+ */
+export const InstamojoWebhookResponse = zod.unknown()
+
+

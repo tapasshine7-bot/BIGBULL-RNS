@@ -7,6 +7,9 @@
  */
 
 export * from './activityLog';
+export * from './apiError';
+export * from './authInput';
+export * from './authResponse';
 export * from './gateway';
 export * from './gatewayStats';
 export * from './healthStatus';
@@ -15,4 +18,7 @@ export * from './liveToolStatus';
 export * from './liveToolStatusStatus';
 export * from './partnerTool';
 export * from './partnerToolStatus';
+export * from './sessionUser';
 export * from './userProfile';
+export * from './vipPaymentInit';
+export * from './vipStatus';

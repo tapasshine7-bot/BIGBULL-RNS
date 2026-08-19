@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: portal
     description: Public VIP Hub data
+  - name: auth
+    description: Account authentication and session operations
+  - name: vip
+    description: VIP payment and status operations
 paths:
   /healthz:
     get:
@@ -89,6 +93,146 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ActivityLog"
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Create a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthInput"
+      responses:
+        "200":
+          description: Account created and session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Sign in with existing credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthInput"
+      responses:
+        "200":
+          description: Signed in and session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: End the current session
+      responses:
+        "200":
+          description: Session ended
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Current session user with verified VIP status
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /heartbeat:
+    post:
+      operationId: heartbeat
+      tags: [auth]
+      summary: Update last-seen for the active session
+      responses:
+        "200":
+          description: Last seen updated
+  /vip/payment:
+    post:
+      operationId: createVipPayment
+      tags: [vip]
+      summary: Create a one-time INR 20 VIP payment request
+      responses:
+        "200":
+          description: Payment link created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VipPaymentInit"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: VIP already unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /vip/status:
+    get:
+      operationId: getVipStatus
+      tags: [vip]
+      summary: Server-verified VIP status for the current session
+      responses:
+        "200":
+          description: Verified VIP status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VipStatus"
+  /webhook/instamojo:
+    post:
+      operationId: instamojoWebhook
+      tags: [vip]
+      summary: Instamojo payment webhook receiver (server-side verification only)
+      responses:
+        "200":
+          description: Webhook processed
+        "400":
+          description: Verification failed
 components:
   schemas:
     HealthStatus:
@@ -170,6 +314,70 @@ components:
         createdAt:
           type: string
       required: [id, action, detail, createdAt]
+    AuthInput:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 24
+        password:
+          type: string
+          minLength: 6
+          maxLength: 128
+      required: [username, password]
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/SessionUser"
+      required: [user]
+    SessionUser:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        joinedAt:
+          type: string
+        vipAccess:
+          type: boolean
+        online:
+          type: boolean
+        lastSeenAt:
+          type: string
+        activityCount:
+          type: number
+      required: [id, username, displayName, joinedAt, vipAccess, online, activityCount]
+    VipStatus:
+      type: object
+      properties:
+        vipAccess:
+          type: boolean
+        verifiedAt:
+          type: string
+      required: [vipAccess, verifiedAt]
+    VipPaymentInit:
+      type: object
+      properties:
+        paymentUrl:
+          type: string
+        paymentRequestId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+      required: [paymentUrl, paymentRequestId, amount, currency]
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
     GatewayStats:
       type: object
       properties:

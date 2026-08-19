@@ -333,6 +333,12 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
+  // Send and receive session cookies by default so that cookie-based
+  // authentication (e.g. the session cookie set by the API backend)
+  // works automatically. Cross-origin cookie handling still requires the
+  // server to set SameSite=None; Secure on the cookie.
+  if (init.credentials == null) init.credentials = "include";
+
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {

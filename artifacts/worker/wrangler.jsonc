@@ -1,0 +1,26 @@
+// Deploy with:
+//   1. wrangler d1 create bigbull-rns-db      (note the returned database_id)
+//   2. Update the "database_id" below with the value from step 1.
+//   3. wrangler d1 execute bigbull-rns-db --file=src/schema.sql
+//   4. wrangler secret put INSTAMOJO_API_KEY
+//   5. wrangler secret put INSTAMOJO_AUTH_TOKEN
+//   6. wrangler secret put INSTAMOJO_WEBHOOK_SALT   (your Instamojo webhook salt)
+//   7. wrangler deploy
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bigbull-rns-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-18",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "bigbull-rns-db",
+      "database_id": "c7c415d7-ec40-42c7-aae7-9b1168030fea",
+      "migrations_dir": "src/migrations",
+      "migrations_table": "_wrangler_migrations"
+    }
+  ]
+}
