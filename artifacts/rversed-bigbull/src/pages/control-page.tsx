@@ -64,7 +64,7 @@ function formatTime(value: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
+    : new Intl.DateTimeFormat('en', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 export function ControlPage() {

@@ -86,7 +86,7 @@ export function StartupPage() {
                   const d = new Date(maintenance!.scheduledEnd!);
                   return Number.isNaN(d.valueOf())
                     ? maintenance!.scheduledEnd!
-                    : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+                    : new Intl.DateTimeFormat('en', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
                 })()}
               </div>
             ) : null}

@@ -529,9 +529,22 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const scope: MaintenanceScope =
         b.scope === "bio" || b.scope === "vip" ? (b.scope as MaintenanceScope) : "both";
       let scheduledEnd: string | null = null;
-      const end = new Date(String(b.scheduledEnd ?? ""));
-      if (b.enabled && Number.isFinite(end.valueOf()) && end.getTime() > Date.now()) {
-        scheduledEnd = end.toISOString();
+      // The frontend sends a datetime-local value (e.g. "2026-08-20T01:06") which has
+      // no timezone. The admin operator is in India (IST, UTC+5:30), and the Worker
+      // runtime is UTC, so parse it explicitly as IST wall-clock time by appending
+      // the +05:30 offset before constructing the Date.
+      let end = new Date(String(b.scheduledEnd ?? ""));
+      if (b.enabled) {
+        const raw = String(b.scheduledEnd ?? "");
+        const m = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::(\d{2}))?$/);
+        if (m) {
+          end = new Date(`${m[1]}:00+05:30`);
+        } else {
+          end = new Date(raw);
+        }
+        if (Number.isFinite(end.valueOf()) && end.getTime() > Date.now()) {
+          scheduledEnd = end.toISOString();
+        }
       }
       const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope, scheduledEnd };
       await writeConfig(db, "maintenance_mode", state);

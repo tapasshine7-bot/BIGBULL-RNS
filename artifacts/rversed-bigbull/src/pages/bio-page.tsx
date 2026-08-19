@@ -14,7 +14,7 @@ function MaintenanceScreen({ message, scheduledEnd }: { message: string; schedul
         const d = new Date(scheduledEnd);
         return Number.isNaN(d.valueOf())
           ? null
-          : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+          : new Intl.DateTimeFormat('en', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
       })()
     : null;
   return (

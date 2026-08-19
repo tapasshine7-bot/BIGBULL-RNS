@@ -82,14 +82,6 @@ export function GatewayPage() {
       </div>
     ) : null}
 
-    {/* Big floating caution banner — appears whenever any dashboard is under maintenance */}
-    {anyLocked && maintenance?.message ? (
-      <CautionBanner
-        message={maintenance.message}
-        scopeLabel={maintenance.scope === 'both' ? 'whole network' : maintenance.scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
-        scheduledEnd={maintenance?.scheduledEnd ?? null}
-      />
-    ) : null}
     <header className="dashboard-topbar">
       <div>
         <div className="dashboard-kicker">Player control center</div>
@@ -129,6 +121,15 @@ export function GatewayPage() {
         </article>
       </LockedCardWrap>
     </section>
+
+    {/* Big floating caution banner — placed below the dashboard cards so a locked card stays visible and tappable */}
+    {anyLocked && maintenance?.message ? (
+      <CautionBanner
+        message={maintenance.message}
+        scopeLabel={maintenance.scope === 'both' ? 'whole network' : maintenance.scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
+        scheduledEnd={maintenance?.scheduledEnd ?? null}
+      />
+    ) : null}
 
     <section className="dashboard-install-section" aria-label="Install app">
       <div className="dashboard-install-inner">
@@ -198,7 +199,7 @@ function CautionBanner({ message, scopeLabel, scheduledEnd }: { message: string;
         const d = new Date(scheduledEnd);
         return Number.isNaN(d.valueOf())
           ? null
-          : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+          : new Intl.DateTimeFormat('en', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
       })()
     : null;
   return (
