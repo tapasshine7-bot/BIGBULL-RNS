@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download } from 'lucide-react';
+import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download, LogOut } from 'lucide-react';
+import { useSession } from '@/hooks/use-session';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { BrandMark } from '@/components/brand-mark';
 
@@ -12,8 +13,14 @@ const nav = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { user, logout } = useSession();
   const accessLabel = 'VIP PLAYER';
+
+  async function handleLogout() {
+    await logout();
+    setLocation('/login');
+  }
   return (
     <div className="noise-surface min-h-[100dvh] bg-background text-foreground">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[246px] flex-col border-r border-sidebar-border bg-sidebar px-5 py-6 md:flex">
@@ -41,15 +48,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="sidebar-system-orb" />
             <div><div className="text-mono text-[9px] uppercase tracking-[.12em] text-foreground">24×7 system</div><div className="text-mono text-[9px] uppercase tracking-[.12em] text-accent">online</div></div>
           </div>
+          <button type="button" onClick={handleLogout} className="group mt-1 flex w-full items-center justify-between border border-transparent px-3 py-3 text-sm text-muted-foreground transition hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground" data-testid="link-logout">
+            <span className="flex items-center gap-3"><LogOut size={16} strokeWidth={1.7} /><span>Logout</span></span>
+            <ChevronRight size={14} className="opacity-0 transition group-hover:opacity-100" />
+          </button>
           <div className="flex items-center gap-3 px-2">
             <div className="grid h-9 w-9 place-items-center bg-secondary text-display text-lg text-primary">V</div>
-            <div className="min-w-0"><div className="truncate text-sm font-semibold" data-testid="text-shell-access">{accessLabel}</div><div className="text-mono text-[9px] uppercase tracking-wider text-accent">Player online</div></div>
+            <div className="min-w-0"><div className="truncate text-sm font-semibold" data-testid="text-shell-access">{user?.email ?? accessLabel}</div><div className="text-mono text-[9px] uppercase tracking-wider text-accent">Player online</div></div>
           </div>
         </div>
       </aside>
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/90 px-5 py-4 backdrop-blur md:hidden">
         <BrandMark compact />
-        <span className="text-mono text-[10px] text-accent">{accessLabel}</span>
+        <span className="text-mono text-[10px] text-accent">{user?.email ?? accessLabel}</span>
         <InstallButton />
       </header>
       <main className="min-h-[100dvh] px-5 py-7 md:ml-[246px] md:px-10 md:py-10 lg:px-14">{children}</main>

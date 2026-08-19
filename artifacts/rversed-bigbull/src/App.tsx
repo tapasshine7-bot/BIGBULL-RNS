@@ -6,6 +6,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { AppShell } from '@/components/app-shell';
 import { StartupPage } from '@/pages/startup-page';
+import { LoginPage } from '@/pages/login-page';
+import { SignupPage } from '@/pages/signup-page';
 import { GatewayPage } from '@/pages/gateway-page';
 import { VipPage } from '@/pages/vip-page';
 import { BioPage } from '@/pages/bio-page';
@@ -27,6 +29,8 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={StartupPage} />
+        <Route path="/login" component={LoginPage} />
+        <Route path="/signup" component={SignupPage} />
         <Route path="/gateway"><AppShell><GatewayPage /></AppShell></Route>
         <Route path="/vip"><AppShell><VipPage /></AppShell></Route>
         <Route path="/bio"><AppShell><BioPage /></AppShell></Route>

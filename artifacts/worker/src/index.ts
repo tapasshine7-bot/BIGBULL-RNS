@@ -1,5 +1,7 @@
-// RNS BIGBULL public portal Worker.
-// All endpoints are open (no authentication, no payment system).
+// RNS BIGBULL portal Worker.
+// Signup/login required for portal access; VIP tools stay free (no payment system).
+
+import { resolveSession, readSessionToken, handleSignup, handleLogin, handleLogout, jsonResponse } from "./auth";
 
 export interface Env {
   db: D1Database;
@@ -101,6 +103,32 @@ function publicActivity(limit: number): { id: string; action: string; detail: st
 
 // ---- Route handlers --------------------------------------------------------
 
+async function requireSession(request: Request, db: D1Database): Promise<Response | null> {
+  const account = await resolveSession(db, readSessionToken(request));
+  if (!account) return jsonResponse(401, { error: "Please sign in to continue." });
+  return null;
+}
+
+async function handleAuth(request: Request, db: D1Database, path: string): Promise<Response | null> {
+  if (request.method !== "POST" && path !== "/auth/session") return null;
+  if (path === "/auth/signup") return corsResponse(await handleSignup(db, await readJsonBody(request)), request);
+  if (path === "/auth/login") return corsResponse(await handleLogin(db, await readJsonBody(request)), request);
+  if (path === "/auth/session") {
+    const account = await resolveSession(db, readSessionToken(request));
+    return corsResponse(jsonResponse(200, account ? { user: account } : { user: null }), request);
+  }
+  if (path === "/auth/logout") return corsResponse(await handleLogout(db, readSessionToken(request)), request);
+  return null;
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  try {
+    return (await request.json()) as unknown;
+  } catch {
+    return {};
+  }
+}
+
 async function handleGateway(db: D1Database): Promise<Response> {
   const tools = await listTools(db);
   const health = await probeAll(tools);
@@ -161,6 +189,17 @@ export default {
 
     try {
       if (path === "/healthz") return corsResponse(jsonResponse(200, { status: "ok" }), request);
+
+      // Public auth endpoints (signup/login are self-protecting with rate-safe D1 lookups).
+      const authResponse = await handleAuth(request, env.db, path);
+      if (authResponse) return authResponse;
+
+      // Protected portal endpoints: require a valid session.
+      if (path === "/gateway" || path === "/vip" || path === "/bio" || path === "/live-status" || path === "/activity") {
+        const authRequired = await requireSession(request, env.db);
+        if (authRequired) return corsResponse(authRequired, request);
+      }
+
       if (path === "/gateway") return corsResponse(await handleGateway(env.db), request);
       if (path === "/vip") return corsResponse(await handleVipHub(env.db), request);
       if (path === "/bio") return corsResponse(await handleBio(env.db), request);

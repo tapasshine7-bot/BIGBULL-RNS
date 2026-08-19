@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { Atom, Check, Download, LoaderCircle, Smartphone } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { useSession } from '@/hooks/use-session';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 
@@ -13,7 +14,21 @@ function formatClock(value: string) {
 }
 
 export function GatewayPage() {
+  const [, setLocation] = useLocation();
+  const { logout } = useSession();
   const query = useGetGateway({ query: { queryKey: getGetGatewayQueryKey() } });
+
+  // If the API ever rejects the saved session (e.g., stale token), sign the
+  // player out and send them back to login instead of a stuck error screen.
+  if (
+    query.isError &&
+    query.error &&
+    typeof query.error === 'object' &&
+    'status' in query.error &&
+    query.error.status === 401
+  ) {
+    void logout().then(() => setLocation('/login'));
+  }
   const liveStatusQuery = useGetLiveStatus({
     query: {
       queryKey: getGetLiveStatusQueryKey(),
