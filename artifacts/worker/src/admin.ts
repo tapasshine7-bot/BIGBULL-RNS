@@ -2,6 +2,8 @@
 // Endpoints: POST/GET /api/admin/* — require x-admin-token header (session).
 // Public mirror: GET /api/banner — returns active banner + maintenance state.
 
+import { generateMemberKey } from "./index";
+
 export interface AdminContext {
   db: D1Database;
 }
@@ -70,6 +72,58 @@ const ADMIN_SCHEMA = [
      text TEXT NOT NULL,
      severity TEXT NOT NULL DEFAULT 'info',
      is_read INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT NOT NULL
+   )`,
+  // Manual announcements posted by the admin — shown in the site Activity feed.
+  `CREATE TABLE IF NOT EXISTS announcements (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     title TEXT NOT NULL,
+     body TEXT,
+     severity TEXT NOT NULL DEFAULT 'info',
+     pinned INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT NOT NULL,
+     expires_at TEXT
+   )`,
+  // Visitor tool-request submissions (free, stored, reviewed in admin).
+  `CREATE TABLE IF NOT EXISTS tool_requests (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     detail TEXT,
+     contact TEXT,
+     status TEXT NOT NULL DEFAULT 'open',
+     created_at TEXT NOT NULL
+   )`,
+  // Per-page visit counters (unique-device, day-bucketed, anonymous).
+  `CREATE TABLE IF NOT EXISTS visit_counters (
+     day TEXT NOT NULL,
+     path TEXT NOT NULL,
+     device TEXT NOT NULL,
+     requests INTEGER NOT NULL DEFAULT 1,
+     PRIMARY KEY (day, path, device)
+   )`,
+  // Tool ordering preferences in VIP Hub (tool_id -> display position).
+  `CREATE TABLE IF NOT EXISTS tool_ordering (
+     tool_id TEXT PRIMARY KEY,
+     position INTEGER NOT NULL DEFAULT 99,
+     updated_at TEXT NOT NULL
+   )`,
+  // Lifetime VIP members identified by a unique key (no accounts, no login).
+  `CREATE TABLE IF NOT EXISTS vip_members (
+     member_key TEXT PRIMARY KEY,
+     display_name TEXT NOT NULL,
+     email TEXT,
+     status TEXT NOT NULL DEFAULT 'registered',
+     paid_at TEXT,
+     approved_at TEXT,
+     created_at TEXT NOT NULL
+   )`,
+  // ₹20 payment requests submitted by members — admin approves manually.
+  `CREATE TABLE IF NOT EXISTS vip_payments (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     member_key TEXT NOT NULL,
+     display_name TEXT NOT NULL,
+     amount INTEGER NOT NULL DEFAULT 20,
+     status TEXT NOT NULL DEFAULT 'pending',
      created_at TEXT NOT NULL
    )`,
 ];
@@ -218,6 +272,11 @@ async function notify(db: D1Database, text: string, severity = "info"): Promise<
 interface BannerState {
   text: string;
   expiresAt: string | null;
+  startsAt: string | null; // ISO timestamp — banner only shows from this moment
+}
+
+function defaultBannerState(): BannerState {
+  return { text: "", expiresAt: null, startsAt: null };
 }
 
 type MaintenanceScope = "both" | "bio" | "vip";
@@ -234,7 +293,12 @@ async function readBanner(db: D1Database): Promise<BannerState | null> {
   if (!row) return null;
   try {
     const parsed: BannerState = JSON.parse(row.value);
-    if (parsed.expiresAt && new Date(parsed.expiresAt) <= new Date()) return null;
+    const now = Date.now();
+    if (parsed.startsAt) {
+      const start = new Date(parsed.startsAt);
+      if (Number.isFinite(start.valueOf()) && start.getTime() > now) return null;
+    }
+    if (parsed.expiresAt && new Date(parsed.expiresAt) <= new Date(now)) return null;
     return parsed;
   } catch {
     return null;
@@ -381,6 +445,30 @@ function safeJson(status: number, body: unknown, request: Request): Response {
 // ---------------------------------------------------------------------------
 // Route dispatcher
 // ---------------------------------------------------------------------------
+
+const ANON = "public-site";
+
+async function recordVisit(db: D1Database, path: string, device: string): Promise<void> {
+  const day = new Date().toISOString().slice(0, 10);
+  void db
+    .prepare(
+      "INSERT INTO visit_counters (day, path, device, requests) VALUES (?, ?, ?, 1) ON CONFLICT(day, path, device) DO UPDATE SET requests = requests + 1",
+    )
+    .bind(day, path, device)
+    .run();
+}
+
+function deviceFingerprint(request: Request): string {
+  // Anonymous, coarse bucket: browser family + platform. Never stores IPs.
+  const ua = request.headers.get("User-Agent") ?? "unknown";
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
+  if (/Edg\//i.test(ua)) return isMobile ? "mobile-edge" : "desktop-edge";
+  if (/OPR\//i.test(ua) || /Opera/i.test(ua)) return isMobile ? "mobile-opera" : "desktop-opera";
+  if (/Chrome/i.test(ua)) return isMobile ? "mobile-chrome" : "desktop-chrome";
+  if (/Safari/i.test(ua)) return isMobile ? "mobile-safari" : "desktop-safari";
+  if (/Firefox/i.test(ua)) return isMobile ? "mobile-firefox" : "desktop-firefox";
+  return isMobile ? "mobile-other" : "desktop-other";
+}
 
 export async function handleAdmin(db: D1Database, request: Request, path: string): Promise<Response> {
   await ensureSchema(db);
@@ -569,7 +657,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     // POST /api/admin/banner/set
     if (path === "/banner/set" && request.method === "POST") {
       const body = await request.json().catch(() => null);
-      const b = (body ?? {}) as { text?: unknown; ttlHours?: unknown };
+      const b = (body ?? {}) as { text?: unknown; ttlHours?: unknown; startsAt?: unknown };
       const text = String(b.text ?? "").trim();
       if (!text) return safeJson(400, { ok: false, error: "Banner text is empty" }, request);
       let expiresAt: string | null = null;
@@ -577,8 +665,19 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       if (Number.isFinite(ttlHours) && ttlHours > 0) {
         expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
       }
-      await writeConfig(db, "active_banner", { text, expiresAt } as BannerState);
-      await audit(db, "Tapas123", "banner.set", "banner", { text, ttlHours: expiresAt ? ttlHours : null });
+      // Scheduled start, same IST rule as maintenance scheduling (operator in India, worker in UTC).
+      let startsAt: string | null = null;
+      const rawStart = String(b.startsAt ?? "").trim();
+      if (rawStart) {
+        const m = rawStart.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::(\d{2}))?$/);
+        let start = new Date(m ? `${m[1]}:00+05:30` : rawStart);
+        if (Number.isFinite(start.valueOf()) && start.getTime() > Date.now()) {
+          startsAt = start.toISOString();
+        }
+      }
+      const banner: BannerState = { text, expiresAt, startsAt };
+      await writeConfig(db, "active_banner", banner);
+      await audit(db, "Tapas123", "banner.set", "banner", { text, ttlHours: expiresAt ? ttlHours : null, startsAt });
       await notify(db, `New banner pushed: ${text.slice(0, 80)}`, "info");
       return safeJson(200, { ok: true }, request);
     }
@@ -587,6 +686,22 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     if (path === "/banner/clear" && request.method === "POST") {
       void db.prepare("DELETE FROM site_config WHERE key = 'active_banner'").run();
       await audit(db, "Tapas123", "banner.cleared", "banner", {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // POST /api/admin/banner/announce — convenience: announcement text pushed as banner immediately
+    if (path === "/banner/announce" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { text?: unknown; ttlHours?: unknown };
+      const text = String(b.text ?? "").trim();
+      if (!text) return safeJson(400, { ok: false, error: "Announcement text is empty" }, request);
+      const ttlHours = Number.isFinite(Number(b.ttlHours)) && Number(b.ttlHours) > 0 ? Number(b.ttlHours) : 72;
+      await writeConfig(db, "active_banner", {
+        text,
+        expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString(),
+        startsAt: null,
+      } as BannerState);
+      await audit(db, "Tapas123", "banner.announce", "banner", { text, ttlHours });
       return safeJson(200, { ok: true }, request);
     }
 
@@ -610,12 +725,156 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
 
     // GET /api/admin/audit
     if (path === "/audit" && request.method === "GET") {
-      const rows = await db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT 100").all();
+      const url = new URL(request.url);
+      const search = String(url.searchParams.get("search") ?? "").trim().toLowerCase();
+      const from = String(url.searchParams.get("from") ?? "");
+      const to = String(url.searchParams.get("to") ?? "");
+      let sql = "SELECT * FROM audit_log";
+      const where: string[] = [];
+      const params: (string | number)[] = [];
+      if (search) {
+        where.push("(action LIKE ? OR actor LIKE ? OR entity LIKE ? OR metadata_json LIKE ?)");
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      }
+      if (from) {
+        where.push("created_at >= ?");
+        params.push(from);
+      }
+      if (to) {
+        where.push("created_at <= ?");
+        params.push(`${to}T23:59:59`);
+      }
+      if (where.length > 0) sql += ` WHERE ${where.join(" AND ")}`;
+      sql += " ORDER BY id DESC LIMIT 200";
+      const rows = await db.prepare(sql).bind(...params).all();
+      return safeJson(200, rows.results ?? [], request);
+    }
+
+    // POST /api/admin/announcements — create a manual announcement (Activity feed)
+    if (path === "/announcements" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { title?: unknown; body?: unknown; severity?: unknown; ttlHours?: unknown };
+      const title = String(b.title ?? "").trim();
+      if (!title) return safeJson(400, { ok: false, error: "Announcement title is empty" }, request);
+      let expiresAt: string | null = null;
+      const ttlHours = Number(b.ttlHours);
+      if (Number.isFinite(ttlHours) && ttlHours > 0) {
+        expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
+      }
+      await db
+        .prepare("INSERT INTO announcements (title, body, severity, created_at, expires_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(title, String(b.body ?? ""), String(b.severity ?? "info"), new Date().toISOString(), expiresAt)
+        .run();
+      await audit(db, "Tapas123", "announcement.created", "announcement", { title });
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/announcements
+    if (path === "/announcements" && request.method === "GET") {
+      const rows = await db
+        .prepare("SELECT * FROM announcements ORDER BY pinned DESC, id DESC LIMIT 100")
+        .all();
+      return safeJson(200, rows.results ?? [], request);
+    }
+
+    // POST /api/admin/announcements/remove
+    if (path === "/announcements/remove" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { id?: unknown };
+      if (b.id) {
+        void db.prepare("DELETE FROM announcements WHERE id = ?").bind(Number(b.id)).run();
+        await audit(db, "Tapas123", "announcement.removed", "announcement", { id: b.id });
+      }
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // POST /api/admin/lock — emergency full-site lock (one-tap)
+    if (path === "/lock" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { locked?: unknown };
+      const locked = Boolean(b.locked);
+      const state: MaintenanceState = locked
+        ? { enabled: true, message: "Site locked by admin — full maintenance in progress.", scope: "both", scheduledEnd: null }
+        : { enabled: false, message: "", scope: "both", scheduledEnd: null };
+      await writeConfig(db, "maintenance_mode", state);
+      await audit(db, "Tapas123", "emergency.lock", "maintenance", { locked }, locked ? "warning" : "info");
+      return safeJson(200, { ok: true, locked }, request);
+    }
+
+    // GET /api/admin/requests — visitor tool requests
+    if (path === "/requests" && request.method === "GET") {
+      const rows = await db.prepare("SELECT * FROM tool_requests ORDER BY id DESC LIMIT 100").all();
+      return safeJson(200, rows.results ?? [], request);
+    }
+
+    // POST /api/admin/requests/mark
+    if (path === "/requests/mark" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { id?: unknown; action?: unknown };
+      if (b.id) {
+        const status = b.action === "done" ? "done" : "open";
+        void db.prepare("UPDATE tool_requests SET status = ? WHERE id = ?").bind(status, Number(b.id)).run();
+        await audit(db, "Tapas123", "request.marked", "request", { id: b.id, status });
+      }
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/stats — real anonymous visitor stats + tool requests count
+    if (path === "/stats" && request.method === "GET") {
+      const day = new Date().toISOString().slice(0, 10);
+      const todayDevices = await db
+        .prepare("SELECT COUNT(*) AS c FROM visit_counters WHERE day = ?")
+        .bind(day)
+        .first<{ c: number }>();
+      const todayRequests = await db
+        .prepare("SELECT SUM(requests) AS c FROM visit_counters WHERE day = ?")
+        .bind(day)
+        .first<{ c: number }>();
+      const totalDevices = await db.prepare("SELECT COUNT(*) AS c FROM visit_counters").first<{ c: number }>();
+      const topPaths = await db
+        .prepare(
+          "SELECT path, SUM(requests) AS visits FROM visit_counters GROUP BY path ORDER BY visits DESC LIMIT 8",
+        )
+        .all<{ path: string; visits: number }>();
+      const openRequests = await db.prepare("SELECT COUNT(*) AS c FROM tool_requests WHERE status = 'open'").first<{ c: number }>();
+      return safeJson(200, {
+        today: {
+          devices: Number((todayDevices && (todayDevices as { c: unknown }).c) ?? 0),
+          pageViews: Number((todayRequests && (todayRequests as { c: unknown }).c) ?? 0),
+        },
+        totalDevices: Number((totalDevices && (totalDevices as { c: unknown }).c) ?? 0),
+        topPaths: (topPaths.results ?? []) as { path: string; visits: number }[],
+        openToolRequests: Number((openRequests && (openRequests as { c: unknown }).c) ?? 0),
+      }, request);
+    }
+
+    // POST /api/admin/ordering — set display position per tool
+    if (path === "/ordering" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { toolId?: unknown; position?: unknown; reset?: unknown };
+      if (b.reset) {
+        void db.prepare("DELETE FROM tool_ordering").run();
+        return safeJson(200, { ok: true }, request);
+      }
+      if (b.toolId) {
+        await db
+          .prepare("INSERT OR REPLACE INTO tool_ordering (tool_id, position, updated_at) VALUES (?, ?, ?)")
+          .bind(String(b.toolId), Number(b.position ?? 99), new Date().toISOString())
+          .run();
+        await audit(db, "Tapas123", "tool.ordering.updated", "tool", { toolId: b.toolId, position: b.position });
+      }
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/ordering
+    if (path === "/ordering" && request.method === "GET") {
+      const rows = await db.prepare("SELECT * FROM tool_ordering ORDER BY position ASC").all();
       return safeJson(200, rows.results ?? [], request);
     }
 
     // GET /api/admin/summary (on-demand daily/weekly-style summary, like repo reports)
     if (path === "/summary" && request.method === "GET") {
+      recordVisit(db, "/api/admin/summary", deviceFingerprint(request));
       const last24h = await db
         .prepare("SELECT COUNT(*) AS c FROM monitor_results WHERE checked_at > datetime('now', '-1 day')")
         .first<{ c: number }>();
@@ -638,6 +897,88 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       }, request);
     }
 
+    // GET /api/admin/vip — lifetime VIP members + pending payments
+    if (path === "/vip" && request.method === "GET") {
+      recordVisit(db, "/api/admin/vip", deviceFingerprint(request));
+      const members = await db.prepare("SELECT * FROM vip_members ORDER BY created_at DESC LIMIT 200").all();
+      const payments = await db.prepare("SELECT * FROM vip_payments ORDER BY id DESC LIMIT 200").all();
+      return safeJson(200, { members: members.results ?? [], payments: payments.results ?? [] }, request);
+    }
+
+    // POST /api/admin/vip/approve — approve a payment, lifetime access for the member key
+    if (path === "/vip/approve" && request.method === "POST") {
+      recordVisit(db, "/api/admin/vip/approve", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { paymentId?: unknown; memberKey?: string; approve?: boolean };
+      const paymentId = Number(parsed.paymentId);
+      if (!Number.isFinite(paymentId) || !parsed.memberKey || typeof parsed.memberKey !== "string") {
+        return safeJson(400, { ok: false, error: "Missing payment id or member key" }, request);
+      }
+      const payment = await db.prepare("SELECT * FROM vip_payments WHERE id = ?").bind(paymentId).first<{ id: number; member_key: string; status: string; created_at: string }>();
+      if (!payment || payment.member_key !== parsed.memberKey) {
+        return safeJson(404, { ok: false, error: "Payment not found or key mismatch" }, request);
+      }
+      const approve = parsed.approve !== false;
+      if (approve && payment.status !== "approved") {
+        await db.prepare("UPDATE vip_payments SET status = 'approved' WHERE id = ?").bind(paymentId).run();
+        await db
+          .prepare("UPDATE vip_members SET status = 'vip', paid_at = COALESCE(paid_at, ?), approved_at = ? WHERE member_key = ?")
+          .bind(payment.created_at, new Date().toISOString(), payment.member_key)
+          .run();
+      }
+      if (!approve && payment.status !== "rejected") {
+        await db.prepare("UPDATE vip_payments SET status = 'rejected' WHERE id = ?").bind(paymentId).run();
+      }
+      void audit(db, "Tapas123", approve ? "vip.approve" : "vip.reject", payment.member_key, { paymentId, memberKey: payment.member_key }).catch(() => {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/vip/config — current UPI payment config
+    if (path === "/vip/config" && request.method === "GET") {
+      recordVisit(db, "/api/admin/vip/config", deviceFingerprint(request));
+      const cfg = await db.prepare("SELECT value FROM site_config WHERE key = 'vip_payment_config'").first<{ value: string }>();
+      let config: object | null = null; try { if (cfg) { config = JSON.parse(cfg.value); } } catch { config = null; }
+      return safeJson(200, config ?? { upiId: "", upiName: "", amount: 20, qrDataUrl: "" }, request);
+    }
+
+    // POST /api/admin/vip/config — store UPI id / amount
+    if (path === "/vip/config" && request.method === "POST") {
+      recordVisit(db, "/api/admin/vip/config", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { upiId?: unknown; upiName?: unknown; amount?: unknown; qrDataUrl?: unknown };
+      const upiId = typeof parsed.upiId === "string" ? parsed.upiId.trim() : "";
+      const upiName = typeof parsed.upiName === "string" ? parsed.upiName.trim() : "RNS BIGBULL";
+      const amount = Math.min(10000, Math.max(1, Number(parsed.amount) || 20));
+      const qrDataUrl = typeof parsed.qrDataUrl === "string" ? parsed.qrDataUrl : "";
+      await db
+        .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('vip_payment_config', ?, ?)")
+        .bind(JSON.stringify({ upiId, upiName, amount, qrDataUrl }), new Date().toISOString())
+        .run();
+      void audit(db, "Tapas123", "vip.config.update", "site_config", { upiId, amount }).catch(() => {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // POST /api/admin/vip/generate — admin manually creates a lifetime VIP key for a user
+    if (path === "/vip/generate" && request.method === "POST") {
+      recordVisit(db, "/api/admin/vip/generate", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { displayName?: unknown; email?: unknown };
+      const displayName = typeof parsed.displayName === "string" ? parsed.displayName.trim().slice(0, 60) : "";
+      if (!displayName) return safeJson(400, { ok: false, error: "Display name is required" }, request);
+      const email = typeof parsed.email === "string" ? parsed.email.trim().slice(0, 120) : "";
+      // Try to reuse a key if one was already generated/registered for this exact name (idempotent lookup).
+      let row = await db.prepare("SELECT member_key FROM vip_members WHERE display_name = ? ORDER BY created_at DESC LIMIT 1").bind(displayName).first<{ member_key: string }>();
+      let memberKey = row?.member_key ?? "";
+      if (!memberKey) {
+        memberKey = generateMemberKey();
+        await db
+          .prepare("INSERT INTO vip_members (member_key, display_name, email, status, paid_at, approved_at, created_at) VALUES (?, ?, ?, 'vip', ?, ?, ?)")
+          .bind(memberKey, displayName, email || null, new Date().toISOString(), new Date().toISOString(), new Date().toISOString())
+          .run();
+      } else {
+        await db.prepare("UPDATE vip_members SET status = 'vip', paid_at = COALESCE(paid_at, ?), approved_at = ? WHERE member_key = ?").bind(new Date().toISOString(), new Date().toISOString(), memberKey).run();
+      }
+      void audit(db, "Tapas123", "vip.generate", memberKey, { displayName, email }).catch(() => {});
+      return safeJson(200, { ok: true, memberKey }, request);
+    }
+
     return safeJson(404, { ok: false, error: "Route not found" }, request);
   } catch (error) {
     const message = (error as { message?: string }).message ?? "Internal error";
@@ -651,6 +992,19 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
 // ---------------------------------------------------------------------------
 
 export async function handleBanner(db: D1Database, request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.searchParams.has("visit")) {
+    // Anonymous page-visit counter used by the visitor-stats panel.
+    const ua = request.headers.get("User-Agent") ?? "unknown";
+    const device = /Mobile|Android|iPhone|iPad|iPod/i.test(ua) ? "mobile" : "desktop";
+    const day = new Date().toISOString().slice(0, 10);
+    void db
+      .prepare(
+        "INSERT INTO visit_counters (day, path, device, requests) VALUES (?, 'site', ?, 1) ON CONFLICT(day, path, device) DO UPDATE SET requests = requests + 1",
+      )
+      .bind(day, device)
+      .run();
+  }
   try {
     const banner = await readBanner(db);
     const maintenance = await readMaintenance(db);

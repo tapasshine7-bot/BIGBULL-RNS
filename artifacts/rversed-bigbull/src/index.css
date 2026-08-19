@@ -778,3 +778,140 @@
   cursor: not-allowed;
   opacity: 0.9;
 }
+
+/* VIP access indicator: pulsing red dot */
+.signal-pulse {
+  animation: signalPulse 1.5s ease-in-out infinite;
+}
+@keyframes signalPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ----- VIP member page (/member) ---------------------------------------- */
+.member-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.member-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.member-mode-active {
+  flex: 1;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  padding: 0.5rem;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.member-mode-inactive {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  padding: 0.5rem;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.member-key-box {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 0.8rem;
+  word-break: break-all;
+}
+.member-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0.35rem 0.6rem;
+  white-space: nowrap;
+}
+.member-input {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.85rem;
+  padding: 0.55rem 0.7rem;
+  margin-top: 0.3rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.member-input:focus {
+  border-color: var(--primary);
+}
+
+/* ----- VIP payment overlay ------------------------------------------------ */
+.vip-upi-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 0.8rem;
+}
+.vip-paid-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  padding: 0.7rem;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ----- Banner popup modal ------------------------------------------------- */
+.banner-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--background) 70%, transparent);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+.banner-modal {
+  width: 100%;
+  max-width: 380px;
+  max-height: 70vh;
+  overflow-y: auto;
+  border: 1px solid var(--accent);
+  background: var(--card);
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ----- VIP Hub dark mode --------------------------------------------------- */
+html.vip-dark-mode {
+  color-scheme: dark;
+}
+html.vip-dark-mode body {
+  background: #05060a;
+  color: #e9e9f0;
+}

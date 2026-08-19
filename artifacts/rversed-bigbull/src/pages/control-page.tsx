@@ -9,7 +9,9 @@ import {
   ArrowLeftRight,
   BadgeCheck,
   Bell,
+  Boxes,
   ClipboardList,
+  Copy,
   Eye,
   EyeOff,
   Gauge,
@@ -26,28 +28,44 @@ import {
 import { BrandMark } from '@/components/brand-mark';
 import { EmptyState } from '@/components/page-kit';
 import {
+  adminAnnounceBanner,
   adminClearBanner,
+  adminCreateAnnouncement,
   adminCreateIncident,
+  adminEmergencyLock,
+  adminGetAnnouncements,
   adminGetAudit,
   adminGetIncidents,
   adminGetMaintenance,
   adminGetMonitors,
   adminGetNotifications,
+  adminGetOrdering,
   adminGetOverview,
+  adminGetRequests,
+  adminGetStats,
   adminGetSummary,
   adminLogin,
   adminLogout,
   adminMarkNotificationsRead,
+  adminMarkRequest,
+  adminRemoveAnnouncement,
+  adminResetOrdering,
   adminResolveIncident,
   adminRunChecks,
   adminSetBanner,
+  adminSetOrdering,
   adminToggleMaintenance,
+  adminApproveVip,
+  adminGenerateVipKey,
+  adminGetVip,
+  adminVipConfigGet,
+  adminVipConfigSave,
   fetchBannerState,
   readAdminToken,
   setAdminToken,
 } from '@/lib/admin';
 
-type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary';
+type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary' | 'siteops';
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: <Gauge size={13} /> },
@@ -57,6 +75,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'notifications', label: 'Notifications', icon: <Bell size={13} /> },
   { id: 'audit', label: 'Audit log', icon: <ClipboardList size={13} /> },
   { id: 'summary', label: 'Reports', icon: <Activity size={13} /> },
+  { id: 'siteops', label: 'Site Ops', icon: <Boxes size={13} /> },
 ];
 
 function formatTime(value: string | null) {
@@ -77,6 +96,7 @@ export function ControlPage() {
 
   const [bannerText, setBannerText] = useState('');
   const [bannerTtl, setBannerTtl] = useState('24');
+  const [bannerStart, setBannerStart] = useState('');
 
   const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string; scope: 'both' | 'bio' | 'vip' }>({ enabled: false, message: '', scope: 'both' });
   const [maintenanceScope, setMaintenanceScope] = useState<'both' | 'bio' | 'vip'>('both');
@@ -89,8 +109,27 @@ export function ControlPage() {
   const [summary, setSummary] = useState<{ checksLast24h: number; failuresLast24h: number; incidentsLast24h: number; adminActionsLast24h: number } | null>(null);
   const [incidentTitle, setIncidentTitle] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [announcementTtl, setAnnouncementTtl] = useState('72');
+  const [announcements, setAnnouncements] = useState<Array<Record<string, unknown>>>([]);
+  const [requests, setRequests] = useState<Array<Record<string, unknown>>>([]);
+  const [ordering, setOrdering] = useState<Array<Record<string, unknown>>>([]);
+  const [stats, setStats] = useState<{ today: { devices: number; pageViews: number }; totalDevices: number; topPaths: Array<{ path: string; visits: number }> } | null>(null);
+  const [auditSearch, setAuditSearch] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // VIP membership + payments
+  const [vipMembers, setVipMembers] = useState<Array<Record<string, unknown>>>([]);
+  const [vipPayments, setVipPayments] = useState<Array<Record<string, unknown>>>([]);
+  const [vipConfig, setVipConfig] = useState<{ upiId: string; upiName: string; amount: number; qrDataUrl: string }>({ upiId: '', upiName: 'RNS BIGBULL', amount: 20, qrDataUrl: '' });
+  const [generateName, setGenerateName] = useState('');
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [upiId, setUpiId] = useState('');
+  const [upiName, setUpiName] = useState('');
+  const [upiAmount, setUpiAmount] = useState('20');
+  const [upiQr, setUpiQr] = useState('');
 
   function flash(message: string) {
     setNotice(message);
@@ -100,7 +139,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),
@@ -109,6 +148,12 @@ export function ControlPage() {
       adminGetSummary(),
       adminGetMaintenance(),
       fetchBannerState(),
+      adminGetStats(),
+      adminGetAnnouncements(),
+      adminGetRequests(),
+      adminGetOrdering(),
+      adminGetVip(),
+      adminVipConfigGet(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
     if (mo.status === 'fulfilled' && Array.isArray(mo.value)) setMonitors(mo.value);
@@ -119,6 +164,16 @@ export function ControlPage() {
     if (mt.status === 'fulfilled' && mt.value && typeof mt.value === 'object' && 'enabled' in mt.value) setMaintenance(mt.value as never);
     // Banner state is only refreshed — maintenance already updated above.
     void bn;
+    if (st.status === 'fulfilled' && st.value && typeof st.value === 'object' && 'today' in st.value) setStats(st.value as never);
+    if (an.status === 'fulfilled' && Array.isArray(an.value)) setAnnouncements(an.value);
+    if (rq.status === 'fulfilled' && Array.isArray(rq.value)) setRequests(rq.value);
+    if (ord.status === 'fulfilled' && Array.isArray(ord.value)) setOrdering(ord.value);
+    if (vp.status === 'fulfilled' && vp.value && typeof vp.value === 'object' && 'members' in vp.value) {
+      const data = vp.value as { members?: unknown; payments?: unknown };
+      if (Array.isArray(data.members)) setVipMembers(data.members);
+      if (Array.isArray(data.payments)) setVipPayments(data.payments);
+    }
+    if (vc.status === 'fulfilled' && vc.value && typeof vc.value === 'object' && 'upiId' in vc.value) setVipConfig(vc.value as never);
   }
 
   useEffect(() => {
@@ -192,10 +247,11 @@ export function ControlPage() {
     setBusyAction('banner');
     try {
       const ttl = Number(bannerTtl);
-      const result = await adminSetBanner(bannerText.trim(), Number.isFinite(ttl) && ttl > 0 ? ttl : null);
+      const result = await adminSetBanner(bannerText.trim(), Number.isFinite(ttl) && ttl > 0 ? ttl : null, bannerStart || null);
       if (result && (result as { ok?: boolean }).ok) {
-        flash('Banner pushed to all visitors.');
+        flash(bannerStart ? 'Banner scheduled — it appears automatically at the chosen time.' : 'Banner pushed to all visitors.');
         setBannerText('');
+        setBannerStart('');
         await refreshAll();
       }
     } catch {
@@ -210,6 +266,61 @@ export function ControlPage() {
     try {
       const result = await adminClearBanner();
       if (result && (result as { ok?: boolean }).ok) flash('Banner cleared.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function pushAnnouncement() {
+    if (!announcementTitle.trim()) {
+      flash('Write the announcement title first.');
+      return;
+    }
+    setBusyAction('announcement');
+    try {
+      const ttl = Number(announcementTtl);
+      const result = await adminCreateAnnouncement(announcementTitle.trim(), announcementBody.trim(), Number.isFinite(ttl) && ttl > 0 ? ttl : null);
+      if (result && (result as { ok?: boolean }).ok) {
+        flash('Announcement added — visitors see it in the Activity feed.');
+        setAnnouncementTitle('');
+        setAnnouncementBody('');
+        await refreshAll();
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function removeAnnouncement(id: number) {
+    setBusyAction(`announcement-${id}`);
+    try {
+      const result = await adminRemoveAnnouncement(id);
+      if (result && (result as { ok?: boolean }).ok) flash('Announcement removed.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function markRequest(id: number, done: boolean) {
+    setBusyAction(`request-${id}`);
+    try {
+      const result = await adminMarkRequest(id, done);
+      if (result && (result as { ok?: boolean }).ok) flash(done ? 'Tool request marked done.' : 'Tool request reopened.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function setOrderPosition(toolId: string, position: string) {
+    const p = Number(position);
+    if (!Number.isFinite(p)) return;
+    setBusyAction(`order-${toolId}`);
+    try {
+      const result = await adminSetOrdering(toolId, p);
+      if (result && (result as { ok?: boolean }).ok) flash(`${toolId} position updated in VIP Hub.`);
       await refreshAll();
     } finally {
       setBusyAction(null);
@@ -250,6 +361,57 @@ export function ControlPage() {
       const result = await adminMarkNotificationsRead(true);
       if (result && (result as { ok?: boolean }).ok) {
         flash('All notifications marked read.');
+        await refreshAll();
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function approveVipPayment(paymentId: number, memberKey: string, approve: boolean) {
+    setBusyAction(`vip-${paymentId}`);
+    try {
+      const result = await adminApproveVip(paymentId, memberKey, approve);
+      if (result && (result as { ok?: boolean }).ok) {
+        flash(approve ? 'Payment approved — lifetime VIP access granted.' : 'Payment rejected.');
+        await refreshAll();
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function generateKeyForUser() {
+    const name = generateName.trim();
+    if (!name) {
+      flash('Enter the user name first.');
+      return;
+    }
+    setBusyAction('vip-generate');
+    setGeneratedKey(null);
+    try {
+      const result = await adminGenerateVipKey(name);
+      if (result && result.ok && result.memberKey) {
+        setGeneratedKey(result.memberKey);
+        flash(`Lifetime VIP key generated for ${name} — share it with the user.`);
+        setGenerateName('');
+        await refreshAll();
+      } else {
+        flash((result as { error?: string } | null)?.error ?? 'Key generation failed.');
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveVipConfig() {
+    setBusyAction('vip-config');
+    try {
+      const amount = Number(upiAmount) || 20;
+      const result = await adminVipConfigSave(upiId.trim(), upiName.trim() || 'RNS BIGBULL', amount, upiQr.trim());
+      if (result && (result as { ok?: boolean }).ok) {
+        flash('VIP payment config saved — the payment screen shows it instantly.');
+        setVipConfig({ upiId: upiId.trim(), upiName: upiName.trim() || 'RNS BIGBULL', amount, qrDataUrl: upiQr.trim() });
         await refreshAll();
       }
     } finally {
@@ -417,6 +579,8 @@ export function ControlPage() {
               setBannerText={setBannerText}
               bannerTtl={bannerTtl}
               setBannerTtl={setBannerTtl}
+              bannerStart={bannerStart}
+              setBannerStart={setBannerStart}
               maintenance={maintenance}
               onPushBanner={pushBanner}
               onClearBanner={clearBanner}
@@ -429,8 +593,57 @@ export function ControlPage() {
           {tab === 'notifications' && (
             <NotificationsTab notifications={notifications} onMarkRead={markNotificationsRead} busy={busyAction === 'notifications'} />
           )}
-          {tab === 'audit' && <AuditTab audit={audit} />}
+          {tab === 'audit' && <AuditTab audit={audit} search={auditSearch} onSearchChange={setAuditSearch} />}
           {tab === 'summary' && <SummaryTab summary={summary} />}
+          {tab === 'siteops' && (
+            <SiteOpsTab
+              stats={stats}
+              announcements={announcements}
+              requests={requests}
+              ordering={ordering}
+              announcementTitle={announcementTitle}
+              setAnnouncementTitle={setAnnouncementTitle}
+              announcementBody={announcementBody}
+              setAnnouncementBody={setAnnouncementBody}
+              announcementTtl={announcementTtl}
+              setAnnouncementTtl={setAnnouncementTtl}
+              onAnnounce={pushAnnouncement}
+              onRemoveAnnouncement={removeAnnouncement}
+              onRequestMark={markRequest}
+              onOrderChange={setOrderPosition}
+              onEmergencyLock={() => {
+                setBusyAction('lock');
+                void adminEmergencyLock(true).then((r) => {
+                  if (r && (r as { ok?: boolean }).ok) flash('EMERGENCY LOCK — whole site is now under maintenance.');
+                  void refreshAll();
+                }).finally(() => setBusyAction(null));
+              }}
+              vipMembers={vipMembers}
+              vipPayments={vipPayments}
+              vipConfig={vipConfig}
+              generateName={generateName}
+              setGenerateName={setGenerateName}
+              generatedKey={generatedKey}
+              upiId={upiId}
+              setUpiId={setUpiId}
+              upiName={upiName}
+              setUpiName={setUpiName}
+              upiAmount={upiAmount}
+              setUpiAmount={setUpiAmount}
+              upiQr={upiQr}
+              setUpiQr={setUpiQr}
+              onGenerateKey={generateKeyForUser}
+              onApproveVip={approveVipPayment}
+              onSaveVipConfig={saveVipConfig}
+              busyGenerate={busyAction === 'vip-generate'}
+              busyApprove={busyAction?.startsWith('vip-') === true}
+              busyConfig={busyAction === 'vip-config'}
+              busyAnnouncement={Boolean(busyAction === 'announcement' || busyAction?.startsWith('announcement-'))}
+              busyLock={Boolean(busyAction === 'lock')}
+              busyRequest={Boolean(busyAction?.startsWith('request-'))}
+              busyOrder={Boolean(busyAction?.startsWith('order-'))}
+            />
+          )}
         </section>
 
         <footer className="mt-8 border-t border-border pt-3 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">
@@ -629,6 +842,8 @@ function BroadcastTab({
   setBannerText,
   bannerTtl,
   setBannerTtl,
+  bannerStart,
+  setBannerStart,
   maintenance,
   onPushBanner,
   onClearBanner,
@@ -645,6 +860,8 @@ function BroadcastTab({
   setBannerText: (value: string) => void;
   bannerTtl: string;
   setBannerTtl: (value: string) => void;
+  bannerStart: string;
+  setBannerStart: (value: string) => void;
   maintenance: { enabled: boolean; message: string };
   onPushBanner: () => void;
   onClearBanner: () => void;
@@ -692,7 +909,7 @@ function BroadcastTab({
             className="flex items-center gap-1.5 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
             data-testid="button-banner-push"
           >
-            <Pencil size={11} /> {busyBanner ? 'Pushing…' : 'Push banner'}
+            <Pencil size={11} /> {busyBanner ? 'Pushing…' : bannerStart ? 'Schedule banner' : 'Push banner'}
           </button>
           <button
             onClick={onClearBanner}
@@ -827,12 +1044,39 @@ function NotificationsTab({
   );
 }
 
-function AuditTab({ audit }: { audit: Array<Record<string, unknown>> }) {
-  return audit.length === 0 ? (
-    <EmptyState title="No audit entries yet" detail="Every admin action — logins, banner pushes, maintenance changes — is recorded here immutably." />
-  ) : (
-    <div className="divide-y divide-border border border-border bg-card/50">
-      {audit.map((entry) => {
+function AuditTab({
+  audit,
+  search,
+  onSearchChange,
+}: {
+  audit: Array<Record<string, unknown>>;
+  search: string;
+  onSearchChange: (value: string) => void;
+}) {
+  const needle = search.trim().toLowerCase();
+  const filtered = needle
+    ? audit.filter((entry) => {
+        const e = entry as { actor?: string; action?: string; entity?: string };
+        return [e.action, e.actor, e.entity].some((part) => String(part ?? '').toLowerCase().includes(needle));
+      })
+    : audit;
+  return (
+    <div className="space-y-2.5">
+      <div>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Search actions — e.g. banner, maintenance, login"
+          className="w-full border border-border bg-background/60 px-2.5 py-1.5 text-xs outline-none focus:border-accent/60"
+          data-testid="input-audit-search"
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <EmptyState title="No audit entries yet" detail="Every admin action — logins, banner pushes, maintenance changes — is recorded here immutably." />
+      ) : (
+        <div className="divide-y divide-border border border-border bg-card/50">
+          {filtered.map((entry) => {
         const e = entry as { id: number; actor: string; action: string; entity: string; severity: string; created_at: string };
         return (
           <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
@@ -845,7 +1089,9 @@ function AuditTab({ audit }: { audit: Array<Record<string, unknown>> }) {
             <div className="text-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground">{formatTime(e.created_at)}</div>
           </div>
         );
-      })}
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -863,6 +1109,484 @@ function SummaryTab({ summary }: { summary: SummaryData }) {
   ) : (
     <div className="flex items-center gap-2 border border-border bg-card/60 p-6 text-sm text-muted-foreground">
           <LoaderCircle size={12} className="spin-slow" /> Loading report…
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Site Ops tab — emergency lock, announcements, visitor stats, tool requests, ordering
+// ---------------------------------------------------------------------------
+
+function SiteOpsTab({
+  stats,
+  announcements,
+  requests,
+  ordering,
+  announcementTitle,
+  setAnnouncementTitle,
+  announcementBody,
+  setAnnouncementBody,
+  announcementTtl,
+  setAnnouncementTtl,
+  onAnnounce,
+  onRemoveAnnouncement,
+  onRequestMark,
+  onOrderChange,
+  onEmergencyLock,
+  vipMembers,
+  vipPayments,
+  vipConfig,
+  generateName,
+  setGenerateName,
+  generatedKey,
+  upiId,
+  setUpiId,
+  upiName,
+  setUpiName,
+  upiAmount,
+  setUpiAmount,
+  upiQr,
+  setUpiQr,
+  onGenerateKey,
+  onApproveVip,
+  onSaveVipConfig,
+  busyGenerate,
+  busyApprove,
+  busyConfig,
+  busyAnnouncement,
+  busyLock,
+  busyRequest,
+  busyOrder,
+}: {
+  stats: { today: { devices: number; pageViews: number }; totalDevices: number; topPaths: Array<{ path: string; visits: number }> } | null;
+  announcements: Array<Record<string, unknown>>;
+  requests: Array<Record<string, unknown>>;
+  ordering: Array<Record<string, unknown>>;
+  announcementTitle: string;
+  setAnnouncementTitle: (value: string) => void;
+  announcementBody: string;
+  setAnnouncementBody: (value: string) => void;
+  announcementTtl: string;
+  setAnnouncementTtl: (value: string) => void;
+  onAnnounce: () => void;
+  onRemoveAnnouncement: (id: number) => void;
+  onRequestMark: (id: number, done: boolean) => void;
+  onOrderChange: (toolId: string, position: string) => void;
+  onEmergencyLock: () => void;
+  busyAnnouncement: boolean;
+  busyLock: boolean;
+  busyRequest: boolean;
+  busyOrder: boolean;
+  vipMembers: Array<Record<string, unknown>>;
+  vipPayments: Array<Record<string, unknown>>;
+  vipConfig: { upiId: string; upiName: string; amount: number; qrDataUrl: string };
+  generateName: string;
+  setGenerateName: (value: string) => void;
+  generatedKey: string | null;
+  upiId: string;
+  setUpiId: (value: string) => void;
+  upiName: string;
+  setUpiName: (value: string) => void;
+  upiAmount: string;
+  setUpiAmount: (value: string) => void;
+  upiQr: string;
+  setUpiQr: (value: string) => void;
+  onGenerateKey: () => void;
+  onApproveVip: (paymentId: number, memberKey: string, approve: boolean) => void;
+  onSaveVipConfig: () => void;
+  busyGenerate: boolean;
+  busyApprove: boolean;
+  busyConfig: boolean;
+}) {
+  const pendingPayments = vipPayments.filter((p) => (p as { status: string }).status === 'pending');
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {/* Emergency lock */}
+      <div className="border border-red-400/30 bg-red-500/5 px-3.5 py-3">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide text-red-300">
+          <Siren size={13} /> Emergency lock
+        </div>
+        <div className="mb-3 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+          One tap locks the ENTIRE site under maintenance instantly — use only in emergencies.
+        </div>
+        <button
+          onClick={onEmergencyLock}
+          disabled={busyLock}
+          className="flex w-full items-center justify-center gap-2 border border-red-400/60 bg-red-500/15 px-4 py-2.5 text-mono text-[9px] uppercase tracking-[.2em] text-red-200 transition hover:bg-red-500/25 disabled:opacity-50"
+          data-testid="button-emergency-lock"
+        >
+          <span className="h-2 w-2 rounded-full bg-red-400 signal-pulse" /> {busyLock ? 'Locking…' : 'LOCK WHOLE SITE NOW'}
+        </button>
+      </div>
+
+      {/* Visitor stats */}
+      <div className="border border-border bg-card/60 px-3.5 py-3">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+          <Gauge size={13} className="text-accent" /> Visitor stats
+        </div>
+        {stats ? (
+          <div className="grid grid-cols-2 gap-2">
+            <StatBlock label="Page views (today)" value={String(stats.today.pageViews)} tone="accent" />
+            <StatBlock label="Unique devices" value={String(stats.totalDevices)} />
+            <div className="col-span-2 border border-border bg-background/40 p-2">
+              <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-muted-foreground">Top pages</div>
+              {stats.topPaths.length === 0 ? (
+                <div className="text-mono text-[8px] text-muted-foreground">No visits recorded yet — they appear as visitors browse.</div>
+              ) : (
+                stats.topPaths.map((row) => (
+                  <div key={row.path} className="flex items-center justify-between text-mono text-[8px]">
+                    <span className="text-foreground/80">{row.path}</span>
+                    <span className="text-accent">{row.visits} visits</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle size={12} className="spin-slow" /> Loading stats…
+          </div>
+        )}
+      </div>
+
+      {/* Announcements */}
+      <div className="border border-border bg-card/60 px-3.5 py-3">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+          <Megaphone size={13} className="text-accent" /> Post announcement
+        </div>
+        <div className="mb-2 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+          Real posts that appear in the Activity feed for all visitors.
+        </div>
+        <input
+          value={announcementTitle}
+          onChange={(event) => setAnnouncementTitle(event.target.value)}
+          maxLength={80}
+          placeholder="Title — e.g. New partner added"
+          className="w-full border border-border bg-background/60 px-2.5 py-1.5 text-xs outline-none focus:border-accent/60"
+          data-testid="input-announcement-title"
+        />
+        <textarea
+          value={announcementBody}
+          onChange={(event) => setAnnouncementBody(event.target.value)}
+          rows={2}
+          maxLength={300}
+          placeholder="Details (optional)"
+          className="mt-2 w-full resize-none border border-border bg-background/60 px-2.5 py-1.5 text-xs outline-none focus:border-accent/60"
+          data-testid="input-announcement-body"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <label className="text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">Auto-remove after (hours)</label>
+          <input
+            type="number"
+            min={1}
+            max={720}
+            value={announcementTtl}
+            onChange={(event) => setAnnouncementTtl(event.target.value)}
+            className="w-16 border border-border bg-background/60 px-2 py-1 text-sm outline-none focus:border-accent/60"
+            data-testid="input-announcement-ttl"
+          />
+          <button
+            onClick={onAnnounce}
+            disabled={busyAnnouncement || !announcementTitle.trim()}
+            className="flex items-center gap-1.5 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+            data-testid="button-announcement-post"
+          >
+            <Megaphone size={11} /> {busyAnnouncement ? 'Posting…' : 'Post'}
+          </button>
+        </div>
+        <div className="mt-3 max-h-44 space-y-1.5 overflow-y-auto">
+          {announcements.length === 0 ? (
+            <div className="text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No announcements yet.</div>
+          ) : (
+            announcements.map((a) => {
+              const item = a as { id: number; title: string; body: string | null; expires_at: string | null; created_at: string };
+              return (
+                <div key={item.id} className="flex items-start justify-between gap-2 border border-border bg-background/40 px-2 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-medium">{item.title}</div>
+                    <div className="text-mono text-[7px] uppercase tracking-[.14em] text-muted-foreground">
+                      {formatTime(item.created_at)} {item.expires_at ? `· until ${formatTime(item.expires_at)}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onRemoveAnnouncement(item.id)}
+                    className="mt-0.5 shrink-0 border border-border px-1.5 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground transition hover:text-red-200"
+                    data-testid={`button-announcement-remove-${item.id}`}
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Tool requests from visitors */}
+      <div className="border border-border bg-card/60 px-3.5 py-3">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+          <ClipboardList size={13} className="text-accent" /> Tool requests
+        </div>
+        <div className="mb-2 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+          Visitors ask for tools from the site — review here.
+        </div>
+        <div className="max-h-48 space-y-1.5 overflow-y-auto">
+          {requests.length === 0 ? (
+            <div className="text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No requests yet.</div>
+          ) : (
+            requests.map((r) => {
+              const item = r as { id: number; name: string; detail: string | null; contact: string | null; status: string; created_at: string };
+              return (
+                <div key={item.id} className="border border-border bg-background/40 px-2.5 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-medium">{item.name}</div>
+                      {item.detail ? <div className="truncate text-mono text-[8px] text-muted-foreground">{item.detail}</div> : null}
+                      <div className="text-mono text-[7px] uppercase tracking-[.14em] text-muted-foreground">
+                        {formatTime(item.created_at)}
+                        {item.contact ? ` · ${item.contact}` : ''}
+                      </div>
+                    </div>
+                    <span className={`mt-0.5 shrink-0 border px-1.5 py-0.5 text-mono text-[7px] uppercase tracking-[.16em] ${item.status === 'done' ? 'border-accent/40 text-accent' : 'border-red-400/50 text-red-300'}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex gap-1.5">
+                    <button
+                      onClick={() => onRequestMark(item.id, item.status !== 'done')}
+                      disabled={busyRequest}
+                      className="border border-border px-2 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground transition hover:text-accent disabled:opacity-50"
+                      data-testid={`button-request-mark-${item.id}`}
+                    >
+                      {item.status === 'done' ? 'Reopen' : 'Mark done'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* VIP membership & payments */}
+      <div className="border border-accent/30 bg-card/60 px-3.5 py-3 lg:col-span-2">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+          <BadgeCheck size={13} className="text-accent" /> VIP Hub — members, payments & keys
+        </div>
+        <div className="mb-2 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+          Complete transaction history. If a user forgets their key, find it below and share it.
+        </div>
+
+        {/* Generate a key for a user manually */}
+        <div className="mb-3 grid gap-2 border border-border bg-background/40 p-2.5 sm:grid-cols-[1fr_auto]">
+          <div>
+            <div className="text-mono text-[7px] uppercase tracking-[.2em] text-muted-foreground">Generate a lifetime key for a user</div>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                value={generateName}
+                onChange={(event) => setGenerateName(event.target.value)}
+                maxLength={60}
+                placeholder="User name"
+                className="min-w-0 flex-1 border border-border bg-background/60 px-2.5 py-1.5 text-xs outline-none focus:border-accent/60"
+                data-testid="input-vip-generate-name"
+              />
+              <button
+                onClick={onGenerateKey}
+                disabled={busyGenerate || !generateName.trim()}
+                className="flex items-center gap-1.5 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+                data-testid="button-vip-generate-key"
+              >
+                {busyGenerate ? <LoaderCircle size={10} className="spin-slow" /> : <Copy size={11} />} {busyGenerate ? 'Creating…' : 'Generate'}
+              </button>
+            </div>
+            {generatedKey ? (
+              <div className="mt-2 flex items-center gap-2 border border-accent/50 bg-accent/10 px-2.5 py-2" data-testid="text-vip-generated-key">
+                <code className="flex-1 break-all text-sm font-bold tracking-wider text-accent">{generatedKey}</code>
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(generatedKey)}
+                  className="shrink-0 border border-border bg-card px-2 py-1 text-mono text-[7px] uppercase tracking-[.14em]"
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          {/* All members — key lookup */}
+          <div>
+            <div className="mb-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">All members ({vipMembers.length}) — copy any key</div>
+            <div className="max-h-52 space-y-1.5 overflow-y-auto">
+              {vipMembers.length === 0 ? (
+                <div className="border border-border bg-background/40 p-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No members yet.</div>
+              ) : (
+                vipMembers.map((m) => {
+                  const key = String((m as { member_key?: string }).member_key ?? '');
+                  const name = String((m as { display_name?: string }).display_name ?? '—');
+                  const status = String((m as { status?: string }).status ?? '');
+                  const created = (m as { created_at?: string }).created_at ?? '';
+                  return (
+                    <div key={key} className="flex items-center gap-2 border border-border bg-background/40 px-2 py-1.5" data-testid={`vip-member-${key}`}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <code className="truncate text-[10px] font-bold tracking-wider text-accent">{key}</code>
+                          <span className={`shrink-0 border px-1 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] ${status === 'vip' ? 'border-accent/40 text-accent' : 'border-border text-muted-foreground'}`}>{status}</span>
+                        </div>
+                        <div className="truncate text-[10px] text-foreground/80">{name} · {formatTime(created)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard?.writeText(key)}
+                        className="shrink-0 border border-border px-1.5 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground transition hover:text-accent"
+                        data-testid={`button-vip-copy-key-${key}`}
+                      >
+                        <Copy size={9} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Pending payments */}
+          <div>
+            <div className="mb-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">Pending payments ({pendingPayments.length})</div>
+            <div className="max-h-52 space-y-1.5 overflow-y-auto">
+              {pendingPayments.length === 0 ? (
+                <div className="border border-border bg-background/40 p-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">Nothing waiting — great.</div>
+              ) : (
+                pendingPayments.map((p) => {
+                  const paymentId = Number((p as { id?: number }).id ?? 0);
+                  const key = String((p as { member_key?: string }).member_key ?? '');
+                  const name = String((p as { display_name?: string }).display_name ?? '—');
+                  return (
+                    <div key={paymentId} className="border border-accent/40 bg-accent/5 px-2.5 py-2" data-testid={`vip-payment-${paymentId}`}>
+                      <div className="flex items-center gap-2">
+                        <code className="truncate text-[10px] font-bold tracking-wider text-accent">{key}</code>
+                        <span className="text-[10px] text-foreground/80">· {name} · ₹{(p as { amount?: number }).amount ?? 20}</span>
+                      </div>
+                      <div className="mt-1.5 flex gap-1.5">
+                        <button
+                          onClick={() => onApproveVip(paymentId, key, true)}
+                          disabled={busyApprove}
+                          className="flex items-center gap-1 border border-accent/50 bg-accent/15 px-2 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-accent transition hover:bg-accent/25 disabled:opacity-50"
+                          data-testid={`button-vip-approve-${paymentId}`}
+                        >
+                          {busyApprove ? <LoaderCircle size={9} className="spin-slow" /> : <BadgeCheck size={10} />} Approve
+                        </button>
+                        <button
+                          onClick={() => onApproveVip(paymentId, key, false)}
+                          disabled={busyApprove}
+                          className="border border-border px-2 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground transition hover:text-red-200 disabled:opacity-50"
+                          data-testid={`button-vip-reject-${paymentId}`}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Transaction history */}
+        <div className="mt-3">
+          <div className="mb-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">Transaction history — all payments ({vipPayments.length})</div>
+          <div className="max-h-60 space-y-1.5 overflow-y-auto">
+            {vipPayments.length === 0 ? (
+              <div className="border border-border bg-background/40 p-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No transactions yet.</div>
+            ) : (
+              vipPayments.map((p) => {
+                const paymentId = Number((p as { id?: number }).id ?? 0);
+                const key = String((p as { member_key?: string }).member_key ?? '');
+                const name = String((p as { display_name?: string }).display_name ?? '—');
+                const status = String((p as { status?: string }).status ?? '');
+                const created = (p as { created_at?: string }).created_at ?? '';
+                return (
+                  <div key={paymentId} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-border bg-background/40 px-2.5 py-1.5" data-testid={`vip-history-${paymentId}`}>
+                    <code className="text-[10px] font-bold tracking-wider text-accent">{key}</code>
+                    <span className="text-[10px] text-foreground/80">{name}</span>
+                    <span className="text-[10px] text-muted-foreground">₹{(p as { amount?: number }).amount ?? 20}</span>
+                    <span className={`shrink-0 border px-1.5 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] ${status === 'approved' ? 'border-accent/40 text-accent' : status === 'rejected' ? 'border-red-400/50 text-red-300' : 'border-border text-muted-foreground'}`}>{status}</span>
+                    <span className="ml-auto text-mono text-[7px] uppercase tracking-[.14em] text-muted-foreground">{formatTime(created)}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* UPI config */}
+        <div className="mt-3 border border-border bg-background/40 p-2.5">
+          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-muted-foreground">Payment screen config — shows on the user's ₹20 screen</div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <div className="text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">UPI ID</div>
+              <input value={upiId} onChange={(event) => setUpiId(event.target.value)} placeholder="yourname@upi" maxLength={80} className="mt-1 w-full border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60" data-testid="input-vip-upi-id" />
+            </div>
+            <div>
+              <div className="text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">UPI name</div>
+              <input value={upiName} onChange={(event) => setUpiName(event.target.value)} placeholder="Your Name" maxLength={60} className="mt-1 w-full border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60" data-testid="input-vip-upi-name" />
+            </div>
+            <div>
+              <div className="text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Amount (₹)</div>
+              <input type="number" min={1} max={1000} value={upiAmount} onChange={(event) => setUpiAmount(event.target.value)} className="mt-1 w-full border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60" data-testid="input-vip-upi-amount" />
+            </div>
+            <div>
+              <div className="text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">QR image URL (base64 data URL)</div>
+              <input value={upiQr} onChange={(event) => setUpiQr(event.target.value)} placeholder="data:image/png;base64,…" maxLength={2000} className="mt-1 w-full border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60" data-testid="input-vip-upi-qr" />
+            </div>
+          </div>
+          <button
+            onClick={onSaveVipConfig}
+            disabled={busyConfig || !upiId.trim()}
+            className="mt-2 flex items-center gap-1.5 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+            data-testid="button-vip-save-config"
+          >
+            {busyConfig ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyConfig ? 'Saving…' : 'Save payment config'}
+          </button>
+          {vipConfig.upiId ? (
+            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Current live config: {vipConfig.upiId} · ₹{vipConfig.amount}{vipConfig.upiName ? ` · ${vipConfig.upiName}` : ''}</div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Tool ordering */}
+      <div className="border border-border bg-card/60 px-3.5 py-3 lg:col-span-2">
+        <div className="mb-2.5 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+          <Boxes size={13} className="text-accent" /> VIP Hub ordering
+        </div>
+        <div className="mb-2 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+          Lower position number = appears earlier in VIP Hub (empty = default order).
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {(['bind', 'emote', 'like', 'gift', 'glory', 'reseller', 'allinone'].map((toolId) => {
+            const current = (ordering.find((o) => (o as { tool_id: string }).tool_id === toolId) as { position?: number } | undefined)?.position ?? '';
+            return (
+              <div key={toolId} className="flex items-center gap-2 border border-border bg-background/40 px-2 py-1.5">
+                <span className="text-mono text-[8px] uppercase tracking-[.14em] text-muted-foreground">{toolId}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  placeholder="—"
+                  value={String(current)}
+                  onChange={(event) => onOrderChange(toolId, event.target.value)}
+                  className="w-14 border border-border bg-background/60 px-2 py-1 text-sm outline-none focus:border-accent/60"
+                  data-testid={`input-order-${toolId}`}
+                />
+                {busyOrder ? <LoaderCircle size={10} className="spin-slow text-accent" /> : null}
+              </div>
+            );
+          }))}
+        </div>
+      </div>
     </div>
   );
 }

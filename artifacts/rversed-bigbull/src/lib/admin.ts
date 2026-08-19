@@ -168,10 +168,10 @@ export async function adminToggleMaintenance(enabled: boolean, message: string, 
   });
 }
 
-export async function adminSetBanner(text: string, ttlHours: number | null) {
+export async function adminSetBanner(text: string, ttlHours: number | null, startsAt: string | null = null) {
   return adminFetch<{ ok: boolean }>('/banner/set', {
     method: 'POST',
-    body: JSON.stringify({ text, ttlHours }),
+    body: JSON.stringify({ text, ttlHours, startsAt }),
   });
 }
 
@@ -200,4 +200,254 @@ export async function adminGetAudit() {
 
 export async function adminGetSummary() {
   return adminFetch<{ checksLast24h: number; failuresLast24h: number; incidentsLast24h: number; adminActionsLast24h: number }>('/summary');
+}
+
+// ---------------------------------------------------------------------------
+// Site Ops features (emergency lock, announcements, stats, requests, ordering)
+// ---------------------------------------------------------------------------
+
+export async function adminEmergencyLock(locked: boolean) {
+  return adminFetch<{ ok: boolean; locked: boolean }>('/lock', {
+    method: 'POST',
+    body: JSON.stringify({ locked }),
+  });
+}
+
+export type AdminAnnouncement = {
+  id: number;
+  title: string;
+  body: string | null;
+  severity: string;
+  pinned: number;
+  created_at: string;
+  expires_at: string | null;
+};
+
+export async function adminCreateAnnouncement(title: string, body: string, ttlHours: number | null = null) {
+  return adminFetch<{ ok: boolean }>('/announcements', {
+    method: 'POST',
+    body: JSON.stringify({ title, body, ttlHours }),
+  });
+}
+
+export async function adminGetAnnouncements() {
+  return adminFetch<AdminAnnouncement[]>('/announcements');
+}
+
+export async function adminRemoveAnnouncement(id: number) {
+  return adminFetch<{ ok: boolean }>('/announcements/remove', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function adminAnnounceBanner(text: string, ttlHours: number | null = null) {
+  return adminFetch<{ ok: boolean }>('/banner/announce', {
+    method: 'POST',
+    body: JSON.stringify({ text, ttlHours }),
+  });
+}
+
+export async function adminGetStats() {
+  return adminFetch<{
+    today: { devices: number; pageViews: number };
+    totalDevices: number;
+    topPaths: Array<{ path: string; visits: number }>;
+    openToolRequests: number;
+  }>('/stats');
+}
+
+export type AdminToolRequest = {
+  id: number;
+  name: string;
+  detail: string | null;
+  contact: string | null;
+  status: string;
+  created_at: string;
+};
+
+export async function adminGetRequests() {
+  return adminFetch<AdminToolRequest[]>('/requests');
+}
+
+export async function adminMarkRequest(id: number, done: boolean) {
+  return adminFetch<{ ok: boolean }>('/requests/mark', {
+    method: 'POST',
+    body: JSON.stringify({ id, action: done ? 'done' : 'open' }),
+  });
+}
+
+export async function adminGetOrdering() {
+  return adminFetch<Array<{ tool_id: string; position: number; updated_at: string }>>('/ordering');
+}
+
+export async function adminSetOrdering(toolId: string, position: number) {
+  return adminFetch<{ ok: boolean }>('/ordering', {
+    method: 'POST',
+    body: JSON.stringify({ toolId, position }),
+  });
+}
+
+export async function adminResetOrdering() {
+  return adminFetch<{ ok: boolean }>('/ordering', {
+    method: 'POST',
+    body: JSON.stringify({ reset: true }),
+  });
+}
+
+// Visitor tool-request submission (public, no login)
+export async function submitToolRequest(name: string, detail: string, contact: string) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/tool-request`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, detail, contact }),
+    });
+    if (!response.ok) throw new Error('network');
+    const data = (await response.json()) as { ok?: boolean; message?: string; error?: string };
+    return { ok: Boolean(data.ok), message: data.message ?? data.error ?? '' };
+  } catch {
+    return { ok: false, message: 'Network error' };
+  }
+}
+
+// Record a page visit (anonymous counter, never fails the page)
+export async function recordPageVisit() {
+  try {
+    void await fetch(`${getApiBaseUrl()}/api/healthz?visit=1`, { cache: 'no-store' });
+  } catch {
+    // best-effort
+  }
+}
+
+export type AdminStats = {
+  today: { devices: number; pageViews: number };
+  totalDevices: number;
+  topPaths: Array<{ path: string; visits: number }>;
+  openToolRequests: number;
+};
+
+// Public anonymous visitor stats (no admin token needed — safe for the dashboard).
+export async function getVisitorStats() {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/visitor-stats`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('network');
+    const data = (await response.json()) as { today?: { devices?: number; pageViews?: number }; totalViews?: number };
+    return {
+      today: {
+        devices: Number(data.today?.devices ?? 0),
+        pageViews: Number(data.today?.pageViews ?? 0),
+      },
+    };
+  } catch {
+    return { today: { devices: 0, pageViews: 0 } };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VIP membership + ₹20 payment (no login — lifetime unique key)
+// ---------------------------------------------------------------------------
+
+export type VipStatus = 'registered' | 'vip';
+
+export async function vipRegister(name: string, email: string, existingKey?: string) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/vip-member`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, email, memberKey: existingKey }),
+    });
+    const data = (await response.json()) as { ok?: boolean; memberKey?: string; status?: string; error?: string };
+    return { ok: Boolean(data.ok), memberKey: data.memberKey ?? '', status: (data.status ?? '') as VipStatus, error: data.error ?? '' };
+  } catch {
+    return { ok: false, memberKey: '', status: '' as VipStatus, error: 'Network error' };
+  }
+}
+
+export async function vipStatus(key: string) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/vip-status?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
+    const data = (await response.json()) as { ok?: boolean; status?: string; error?: string };
+    return { ok: Boolean(data.ok), status: (data.status ?? '') as VipStatus, error: data.error ?? '' };
+  } catch {
+    return { ok: false, status: '' as VipStatus, error: 'Network error' };
+  }
+}
+
+export async function vipPay(memberKey: string) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/vip-pay`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ memberKey }),
+    });
+    const data = (await response.json()) as { ok?: boolean; status?: string; message?: string; error?: string };
+    return { ok: Boolean(data.ok), status: data.status ?? '', message: data.message ?? data.error ?? '' };
+  } catch {
+    return { ok: false, status: '', message: 'Network error' };
+  }
+}
+
+export type VipPayConfig = { upiId: string; upiName: string; amount: number; qrDataUrl: string };
+
+export async function vipPayConfig() {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/vip-pay-config`, { cache: 'no-store' });
+    const data = (await response.json()) as VipPayConfig;
+    return data;
+  } catch {
+    return { upiId: '', upiName: 'RNS BIGBULL', amount: 20, qrDataUrl: '' } as VipPayConfig;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VIP admin endpoints (members, payments, UPI config, manual key generation)
+// ---------------------------------------------------------------------------
+
+export type AdminVipMember = {
+  member_key: string;
+  display_name: string;
+  email: string | null;
+  status: string;
+  paid_at: string | null;
+  approved_at: string | null;
+  created_at: string;
+};
+
+export type AdminVipPayment = {
+  id: number;
+  member_key: string;
+  display_name: string;
+  amount: number;
+  status: string;
+  created_at: string;
+};
+
+export async function adminGetVip() {
+  return adminFetch<{ members: AdminVipMember[]; payments: AdminVipPayment[] }>('/vip');
+}
+
+export async function adminApproveVip(paymentId: number, memberKey: string, approve: boolean) {
+  return adminFetch<{ ok: boolean }>('/vip/approve', {
+    method: 'POST',
+    body: JSON.stringify({ paymentId, memberKey, approve }),
+  });
+}
+
+export async function adminGenerateVipKey(displayName: string, email?: string) {
+  return adminFetch<{ ok: boolean; memberKey?: string; error?: string }>('/vip/generate', {
+    method: 'POST',
+    body: JSON.stringify({ displayName, email }),
+  });
+}
+
+export async function adminVipConfigGet() {
+  return adminFetch<VipPayConfig>('/vip/config');
+}
+
+export async function adminVipConfigSave(upiId: string, upiName: string, amount: number, qrDataUrl: string) {
+  return adminFetch<{ ok: boolean }>('/vip/config', {
+    method: 'POST',
+    body: JSON.stringify({ upiId, upiName, amount, qrDataUrl }),
+  });
 }

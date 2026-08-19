@@ -48,6 +48,28 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
+function sanitizeInput(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/[<>]/g, "")
+    .replace(/javascript:/gi, "")
+    .trim()
+    .slice(0, 500);
+}
+
+async function recordPublicVisit(db: D1Database, path: string, request: Request): Promise<void> {
+  const ua = request.headers.get("User-Agent") ?? "unknown";
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/i.test(ua);
+  const device = isMobile ? "mobile" : "desktop";
+  const day = new Date().toISOString().slice(0, 10);
+  void db
+    .prepare(
+      "INSERT INTO visit_counters (day, path, device, requests) VALUES (?, ?, ?, 1) ON CONFLICT(day, path, device) DO UPDATE SET requests = requests + 1",
+    )
+    .bind(day, path, device)
+    .run();
+}
+
 function toolToPublic(tool: ToolRow): Tool {
   return {
     id: tool.id,
@@ -66,6 +88,20 @@ async function listTools(db: D1Database, freeOnly = false): Promise<ToolRow[]> {
     : db.prepare("SELECT * FROM tool_registry WHERE enabled = 1 ORDER BY id");
   const { results } = await base.all<ToolRow>();
   return results ?? [];
+}
+
+async function loadOrdering(db: D1Database): Promise<Map<string, number>> {
+  const rows = await db.prepare("SELECT tool_id, position FROM tool_ordering").all<{ tool_id: string; position: number }>();
+  return new Map(((rows.results ?? []) as { tool_id: string; position: number }[]).map((r) => [r.tool_id, r.position]));
+}
+
+async function reorderTools(db: D1Database, tools: ToolRow[]): Promise<ToolRow[]> {
+  const ordering = await loadOrdering(db);
+  return [...tools].sort((a, b) => {
+    const pa = ordering.get(a.id) ?? 99;
+    const pb = ordering.get(b.id) ?? 99;
+    return pa - pb || a.id.localeCompare(b.id);
+  });
 }
 
 interface ToolStatus {
@@ -103,9 +139,30 @@ function publicActivity(limit: number): { id: string; action: string; detail: st
 
 // ---- Route handlers --------------------------------------------------------
 
-async function handleGateway(db: D1Database): Promise<Response> {
+async function handleGateway(db: D1Database, request: Request): Promise<Response> {
+  await recordPublicVisit(db, "/gateway", request);
   const tools = await listTools(db);
   const health = await probeAll(tools);
+  // Live manual announcements posted from the admin panel.
+  let recentActivity: { id: string; action: string; detail: string; createdAt: string }[] = [];
+  try {
+    const now = new Date().toISOString();
+    const cutoff = new Date(new Date(now).getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await db
+      .prepare(
+        "SELECT id, title, body, severity, created_at FROM announcements WHERE (expires_at IS NULL OR expires_at > ?) AND created_at > ? ORDER BY pinned DESC, id DESC LIMIT 12",
+      )
+      .bind(now, cutoff)
+      .all<{ id: number; title: string; body: string; severity: string; created_at: string }>();
+    recentActivity = ((rows.results ?? []) as { id: number; title: string; body: string; severity: string; created_at: string }[]).map((r) => ({
+      id: `announcement-${r.id}`,
+      action: r.title,
+      detail: r.body ?? "",
+      createdAt: r.created_at,
+    }));
+  } catch {
+    recentActivity = [];
+  }
   return jsonResponse(200, {
     user: { id: "public-player", displayName: "VIP PLAYER", joinedAt: "2026-01-01T00:00:00.000Z", vipAccess: true, activityCount: 3 },
     stats: {
@@ -114,12 +171,13 @@ async function handleGateway(db: D1Database): Promise<Response> {
       activeSessions: 1,
     },
     tools: tools.map(toolToPublic),
-    recentActivity: publicActivity(3),
+    recentActivity: [...recentActivity, ...publicActivity(3)].slice(0, 15),
   });
 }
 
-async function handleVipHub(db: D1Database): Promise<Response> {
-  const tools = await listTools(db);
+async function handleVipHub(db: D1Database, request: Request): Promise<Response> {
+  await recordPublicVisit(db, "/vip", request);
+  const tools = await reorderTools(db, await listTools(db));
   const health = await probeAll(tools);
   const statusById = new Map(health.statuses.map((s) => [s.id, s.status]));
   return jsonResponse(200, {
@@ -134,20 +192,161 @@ async function handleVipHub(db: D1Database): Promise<Response> {
   });
 }
 
-async function handleBio(db: D1Database): Promise<Response> {
+async function handleBio(db: D1Database, request: Request): Promise<Response> {
+  await recordPublicVisit(db, "/bio", request);
   const tools = await listTools(db, true);
   const bio = tools.find((tool) => tool.id === "bio");
   if (!bio) return jsonResponse(500, { error: "Bio tool not configured." });
   return jsonResponse(200, toolToPublic(bio));
 }
 
-async function handleLiveStatus(db: D1Database): Promise<Response> {
+async function handleLiveStatus(db: D1Database, request: Request): Promise<Response> {
+  await recordPublicVisit(db, "/live", request);
   const tools = await listTools(db);
   return jsonResponse(200, await probeAll(tools));
 }
 
-async function handleActivity(): Promise<Response> {
-  return jsonResponse(200, publicActivity(50));
+async function handleActivity(db: D1Database): Promise<Response> {
+  let announcements: { id: string; action: string; detail: string; createdAt: string }[] = [];
+  try {
+    const now = new Date().toISOString();
+    const cutoff = new Date(new Date(now).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await db
+      .prepare(
+        "SELECT id, title, body, severity, created_at FROM announcements WHERE (expires_at IS NULL OR expires_at > ?) AND created_at > ? ORDER BY pinned DESC, id DESC LIMIT 50",
+      )
+      .bind(now, cutoff)
+      .all<{ id: number; title: string; body: string; severity: string; created_at: string }>();
+    announcements = ((rows.results ?? []) as { id: number; title: string; body: string; severity: string; created_at: string }[]).map((r) => ({
+      id: `announcement-${r.id}`,
+      action: r.title,
+      detail: r.body ?? "",
+      createdAt: r.created_at,
+    }));
+  } catch {
+    announcements = [];
+  }
+  return jsonResponse(200, [...announcements, ...publicActivity(50)]);
+}
+
+export function generateMemberKey(): string {
+  const buf = new Uint8Array(6);
+  crypto.getRandomValues(buf);
+  const part = (n: number) =>
+    Array.from(buf.slice(n, n + 3))
+      .map((b) => b.toString(36).toUpperCase())
+      .join("");
+  return `RNS-${part(0)}-${part(3)}`;
+}
+
+// Public VIP membership: register (get a lifetime unique key), pay request, check status.
+async function handleVipMember(db: D1Database, request: Request): Promise<Response> {
+  if (request.method !== "POST") return jsonResponse(405, { ok: false, error: "Use POST" });
+  const body = await request.json().catch(() => null);
+  const b = (body ?? {}) as { name?: unknown; email?: unknown; memberKey?: unknown };
+  const email = sanitizeInput(b.email).slice(0, 120);
+  const existingKey = typeof b.memberKey === "string" ? b.memberKey.trim().toUpperCase() : "";
+  if (existingKey) {
+    // Returning user re-entering their saved key (e.g. new device or cleared browser data).
+    // Name is not needed — the key itself proves membership.
+    const row = await db.prepare("SELECT status FROM vip_members WHERE member_key = ?").bind(existingKey).first<{ status: string }>();
+    if (!row) return jsonResponse(404, { ok: false, error: "This key was never registered. Check the spelling or register again." });
+    return jsonResponse(200, { ok: true, memberKey: existingKey, status: row.status });
+  }
+  const name = sanitizeInput(b.name).slice(0, 60);
+  if (!name) return jsonResponse(400, { ok: false, error: "Name is required" });
+  const memberKey = generateMemberKey();
+  await db
+    .prepare("INSERT INTO vip_members (member_key, display_name, email, status, created_at) VALUES (?, ?, ?, 'registered', ?)")
+    .bind(memberKey, name, email || null, new Date().toISOString())
+    .run();
+  return jsonResponse(200, { ok: true, memberKey, status: "registered" });
+}
+
+// Public: check whether a member key has lifetime VIP access.
+async function handleVipStatus(db: D1Database, request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const key = (url.searchParams.get("key") ?? "").trim().toUpperCase();
+  if (!key) return jsonResponse(400, { ok: false, error: "Key required" });
+  const row = await db.prepare("SELECT status FROM vip_members WHERE member_key = ?").bind(key).first<{ status: string }>();
+  if (!row) return jsonResponse(404, { ok: false, error: "Unknown key" });
+  return jsonResponse(200, { ok: true, status: row.status });
+}
+
+// Public: submit a ₹20 payment request against a registered key.
+async function handleVipPay(db: D1Database, request: Request): Promise<Response> {
+  if (request.method !== "POST") return jsonResponse(405, { ok: false, error: "Use POST" });
+  const body = await request.json().catch(() => null);
+  const b = (body ?? {}) as { memberKey?: unknown };
+  const key = (typeof b.memberKey === "string" ? b.memberKey : "").trim().toUpperCase();
+  const member = await db.prepare("SELECT member_key, display_name, status FROM vip_members WHERE member_key = ?").bind(key).first<{
+    member_key: string;
+    display_name: string;
+    status: string;
+  }>();
+  if (!member) return jsonResponse(404, { ok: false, error: "Key not registered. Register first." });
+  if (member.status === "vip") return jsonResponse(200, { ok: true, status: "vip", message: "You already have lifetime VIP access!" });
+  const existing = await db.prepare("SELECT id, status FROM vip_payments WHERE member_key = ? AND status = 'pending' ORDER BY id DESC LIMIT 1").bind(key).first<{ id: number; status: string }>();
+  if (existing) return jsonResponse(200, { ok: true, status: "pending", message: "You already have a pending payment. Pay ₹20 to your UPI ID then tap 'I have paid'." });
+  await db
+    .prepare("INSERT INTO vip_payments (member_key, display_name, amount, status, created_at) VALUES (?, ?, 20, 'pending', ?)")
+    .bind(key, member.display_name, new Date().toISOString())
+    .run();
+  return jsonResponse(200, { ok: true, status: "pending", message: "Payment request sent. Pay ₹20 then tap 'I have paid' — approval takes a few minutes." });
+}
+
+// Public: the UPI payment config shown on the payment screen (UPI ID + amount; QR image optional).
+async function handleVipPayConfig(db: D1Database): Promise<Response> {
+  const row = await db.prepare("SELECT value FROM site_config WHERE key = 'vip_payment_config'").first<{ value: string }>();
+  let config: { upiId: string; upiName: string; amount: number; qrDataUrl: string } = { upiId: "", upiName: "RNS BIGBULL", amount: 20, qrDataUrl: "" };
+  if (row?.value) {
+    try {
+      const parsed = JSON.parse(row.value) as Record<string, unknown>;
+      config = {
+        upiId: typeof parsed.upiId === "string" ? parsed.upiId : "",
+        upiName: typeof parsed.upiName === "string" ? parsed.upiName : "RNS BIGBULL",
+        amount: Number(parsed.amount) || 20,
+        qrDataUrl: typeof parsed.qrDataUrl === "string" ? parsed.qrDataUrl : "",
+      };
+    } catch {
+      /* keep defaults */
+    }
+  }
+  return jsonResponse(200, config);
+}
+
+// Public: anonymous visitor stats for today (safe, read-only, no admin token).
+async function handleVisitorStats(db: D1Database): Promise<Response> {
+  const day = new Date().toISOString().slice(0, 10);
+  const today = await db
+    .prepare("SELECT COUNT(DISTINCT device) AS devices, SUM(requests) AS views FROM visit_counters WHERE day = ?")
+    .bind(day)
+    .first<{ devices: number; views: number }>();
+  const total = await db
+    .prepare("SELECT SUM(requests) AS views FROM visit_counters")
+    .first<{ views: number }>();
+  return jsonResponse(200, {
+    today: {
+      devices: Number((today && (today as { devices: unknown }).devices) ?? 0),
+      pageViews: Number((today && (today as { views: unknown }).views) ?? 0),
+    },
+    totalViews: Number((total && (total as { views: unknown }).views) ?? 0),
+  });
+}
+
+async function handleToolRequest(db: D1Database, request: Request): Promise<Response> {
+  if (request.method !== "POST") return jsonResponse(405, { ok: false, error: "Use POST" });
+  const body = await request.json().catch(() => null);
+  const b = (body ?? {}) as { name?: unknown; detail?: unknown; contact?: unknown };
+  const name = sanitizeInput(b.name).slice(0, 120);
+  if (!name) return jsonResponse(400, { ok: false, error: "Tool name is required" });
+  const detail = sanitizeInput(b.detail).slice(0, 500);
+  const contact = sanitizeInput(b.contact).slice(0, 120);
+  await db
+    .prepare("INSERT INTO tool_requests (name, detail, contact, status, created_at) VALUES (?, ?, ?, 'open', ?)")
+    .bind(name, detail, contact, new Date().toISOString())
+    .run();
+  return jsonResponse(200, { ok: true, message: "Request saved — the admin will see it in the control panel." });
 }
 
 // ---- Entry -----------------------------------------------------------------
@@ -163,11 +362,17 @@ export default {
 
     try {
       if (path === "/healthz") return corsResponse(jsonResponse(200, { status: "ok" }), request);
-      if (path === "/gateway") return corsResponse(await handleGateway(env.db), request);
-      if (path === "/vip") return corsResponse(await handleVipHub(env.db), request);
-      if (path === "/bio") return corsResponse(await handleBio(env.db), request);
-      if (path === "/live-status") return corsResponse(await handleLiveStatus(env.db), request);
-      if (path === "/activity") return corsResponse(await handleActivity(), request);
+      if (path === "/gateway") return corsResponse(await handleGateway(env.db, request), request);
+      if (path === "/vip") return corsResponse(await handleVipHub(env.db, request), request);
+      if (path === "/bio") return corsResponse(await handleBio(env.db, request), request);
+      if (path === "/live-status") return corsResponse(await handleLiveStatus(env.db, request), request);
+      if (path === "/activity") return corsResponse(await handleActivity(env.db), request);
+      if (path === "/tool-request") return corsResponse(await handleToolRequest(env.db, request), request);
+      if (path === "/vip-member") return corsResponse(await handleVipMember(env.db, request), request);
+      if (path === "/vip-status") return corsResponse(await handleVipStatus(env.db, request), request);
+      if (path === "/vip-pay") return corsResponse(await handleVipPay(env.db, request), request);
+      if (path === "/vip-pay-config") return corsResponse(await handleVipPayConfig(env.db), request);
+      if (path === "/visitor-stats") return corsResponse(await handleVisitorStats(env.db), request);
       if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
       if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });

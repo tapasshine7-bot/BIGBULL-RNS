@@ -4,7 +4,7 @@ import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
-import { fetchBannerState } from '@/lib/admin';
+import { fetchBannerState, getVisitorStats } from '@/lib/admin';
 import { Lock } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
@@ -34,7 +34,27 @@ export function GatewayPage() {
   const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
   const [banner, setBanner] = useState<string | null>(null);
+  const [bannerText, setBannerText] = useState<string | null>(null);
+  const [bannerOpen, setBannerOpen] = useState(false);
   const [maintenance, setMaintenance] = useState<AdminMaintenance>(null);
+  const [stats, setStats] = useState<{ today: { devices: number; pageViews: number } } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getVisitorStats().then((data) => {
+      if (cancelled) return;
+      setStats(data);
+    }).catch(() => {});
+    const t = window.setInterval(() => {
+      void getVisitorStats().then((data) => {
+        if (cancelled) return;
+        setStats(data);
+      }).catch(() => {});
+    }, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, []);
 
   useEffect(() => {
     // Update banner strip without blocking the dashboard render.
@@ -42,7 +62,10 @@ export function GatewayPage() {
     const load = () => {
       void fetchBannerState().then((state) => {
         if (cancelled) return;
-        if (state.banner && state.banner.text) setBanner(state.banner.text);
+        if (state.banner && state.banner.text) {
+          setBanner(state.banner.text);
+          setBannerText(state.banner.text);
+        }
         setMaintenance(state.maintenance);
       });
     };
@@ -76,9 +99,28 @@ export function GatewayPage() {
 
   return <div className="route-in dashboard-page">
     {(banner || maintenanceBanner) ? (
-      <div className="mx-auto mb-4 flex max-w-4xl items-center gap-2 border border-amber-300/50 bg-amber-300/10 px-3 py-2 text-mono text-[10px] uppercase tracking-[.16em] text-amber-300" data-testid="admin-banner-strip">
+      <button
+        type="button"
+        onClick={() => bannerText && setBannerOpen(true)}
+        className="mx-auto mb-4 flex w-full max-w-4xl items-center gap-2 border border-amber-300/50 bg-amber-300/10 px-3 py-2 text-left text-mono text-[10px] uppercase tracking-[.16em] text-amber-300 transition hover:bg-amber-300/20"
+        data-testid="admin-banner-strip"
+      >
         <Megaphone size={12} className="shrink-0" />
         <span className="truncate">{maintenanceBanner ?? banner}</span>
+        <span className="ml-auto shrink-0 text-[9px] normal-case tracking-[.12em] text-amber-300/80">Tap to read</span>
+      </button>
+    ) : null}
+
+    {bannerOpen && bannerText ? (
+      <div className="banner-modal-backdrop" onClick={() => setBannerOpen(false)} role="dialog" aria-modal="true" data-testid="banner-popup">
+        <div className="banner-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-mono text-[10px] uppercase tracking-[.2em] text-amber-300">Site announcement</div>
+            <button type="button" onClick={() => setBannerOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close" data-testid="button-close-banner-popup">✕</button>
+          </div>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">{bannerText}</p>
+          <button type="button" onClick={() => setBannerOpen(false)} className="mt-4 self-end border border-accent/50 bg-accent/10 px-4 py-1.5 text-mono text-[9px] uppercase tracking-[.16em] text-accent hover:bg-accent/20" data-testid="button-close-banner">Got it</button>
+        </div>
       </div>
     ) : null}
 
@@ -149,6 +191,10 @@ export function GatewayPage() {
           {liveTools.length === 0 ? <div className="py-5 text-xs text-muted-foreground">Checking partner tools…</div> : liveTools.map((tool) => <a key={tool.id} href={tool.url} target="_blank" rel="noreferrer" className="live-tool-item" data-testid={`dashboard-live-${tool.id}`}><span>{tool.name}</span><StatusPill status={tool.status} /></a>)}
         </div>
         <div className="dashboard-panel-footer"><Check size={13} /> {liveStatusQuery.data ? `Checked ${formatClock(liveStatusQuery.data.checkedAt)}` : 'Checking live availability'}</div>
+        <div className="mt-3 border-t border-border pt-3">
+          <div className="text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">Visitors today</div>
+          <div className="mt-1 text-display text-lg font-bold text-accent">{stats?.today?.pageViews ?? '…'} views · {stats?.today?.devices ?? '…'} devices</div>
+        </div>
       </article>
       <article className="dashboard-panel">
         <div className="dashboard-panel-heading"><div><div className="dashboard-section-label">Event stream</div><h2>Recent activity</h2></div><Link href="/activity" className="dashboard-view-all">View All</Link></div>
