@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Atom, Check } from 'lucide-react';
+import { Atom, Check, LoaderCircle } from 'lucide-react';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
 import { QueryError, QueryLoading } from '@/components/page-kit';
@@ -32,6 +32,8 @@ export function GatewayPage() {
   if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />;
   if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
 
+  const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
+
   return <div className="route-in dashboard-page">
     <header className="dashboard-topbar">
       <div>
@@ -39,7 +41,7 @@ export function GatewayPage() {
         <h1 className="dashboard-welcome">Welcome to the <span>{gateway.user.displayName}</span></h1>
         <p className="dashboard-subtitle">Ready to dominate today?</p>
       </div>
-      <div className="network-nominal"><span className="signal-pulse" /> {isChecking ? 'Checking network' : 'Live network status'}</div>
+      <div className="network-nominal"><span className="signal-pulse" /> {stillConnecting ? <span className="inline-flex items-center gap-1.5"><LoaderCircle size={12} className="spin-slow" /> Connecting to gateway…</span> : isChecking ? 'Checking network' : 'Live network status'}</div>
     </header>
 
     <section className="dashboard-feature-grid" aria-label="Primary dashboards">
