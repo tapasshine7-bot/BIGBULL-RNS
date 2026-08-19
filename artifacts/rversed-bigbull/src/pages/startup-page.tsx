@@ -80,6 +80,16 @@ export function StartupPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-amber-300 signal-pulse" />
               Checking every few seconds…
             </div>
+            {maintenance?.scheduledEnd ? (
+              <div className="mt-3 text-mono text-[9px] uppercase tracking-[.2em] text-amber-300">
+                Auto-reopens at {(() => {
+                  const d = new Date(maintenance!.scheduledEnd!);
+                  return Number.isNaN(d.valueOf())
+                    ? maintenance!.scheduledEnd!
+                    : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+                })()}
+              </div>
+            ) : null}
           </div>
           <div className="mt-5 flex justify-between text-mono text-[9px] uppercase tracking-widest text-muted-foreground">
             <span>Live monitor / standby</span>

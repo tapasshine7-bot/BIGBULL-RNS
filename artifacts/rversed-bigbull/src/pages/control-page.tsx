@@ -80,6 +80,7 @@ export function ControlPage() {
 
   const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string; scope: 'both' | 'bio' | 'vip' }>({ enabled: false, message: '', scope: 'both' });
   const [maintenanceScope, setMaintenanceScope] = useState<'both' | 'bio' | 'vip'>('both');
+  const [maintenanceEnd, setMaintenanceEnd] = useState<string>('');
   const [overview, setOverview] = useState<{ total: number; green: number; yellow: number; red: number; openIncidents: number; averageUptime: number } | null>(null);
   const [monitors, setMonitors] = useState<Array<{ id: number; name: string; url: string; enabled: number; latest: { status: string; latency_ms: number | null; status_code: number | null; error: string | null; checked_at: string } | null }>>([]);
   const [incidents, setIncidents] = useState<Array<{ id: number; title: string; severity: string; status: string; note: string | null; created_at: string; resolved_at: string | null }>>([]);
@@ -168,9 +169,10 @@ export function ControlPage() {
   async function toggleMaintenance(next: boolean) {
     setBusyAction('maintenance');
     try {
-      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''), maintenanceScope);
+      const end = next ? maintenanceEnd || null : null;
+      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''), maintenanceScope, end);
       if (result && (result as { ok?: boolean }).ok) {
-        const updated = { enabled: next, message: (result as { message?: string }).message ?? maintenance.message, scope: (result as { scope?: 'both' | 'bio' | 'vip' }).scope ?? maintenanceScope };
+        const updated = { enabled: next, message: (result as { message?: string }).message ?? maintenance.message, scope: (result as { scope?: 'both' | 'bio' | 'vip' }).scope ?? maintenanceScope, scheduledEnd: (result as { scheduledEnd?: string | null }).scheduledEnd ?? null };
         setMaintenance(updated);
         const scopeName = updated.scope === 'bio' ? 'Bio Tool' : updated.scope === 'vip' ? 'VIP Hub' : 'the whole site';
         flash(next ? `Maintenance mode is ON for ${scopeName}.` : 'Maintenance mode is OFF — site is live.');
@@ -256,8 +258,11 @@ export function ControlPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Sign-in gate
+  // Console (computed before the sign-in gate so hook ordering can never change)
   // ---------------------------------------------------------------------------
+
+  const unreadCount = useMemo(() => notifications.filter((n) => n.is_read === 0).length, [notifications]);
+  const refreshPending = busyAction !== null;
 
   if (!signedIn) {
     return (
@@ -326,9 +331,6 @@ export function ControlPage() {
   // ---------------------------------------------------------------------------
   // Console
   // ---------------------------------------------------------------------------
-
-  const unreadCount = useMemo(() => notifications.filter((n) => n.is_read === 0).length, [notifications]);
-  const refreshPending = busyAction !== null;
 
   return (
     <div className="min-h-[100dvh] bg-[#0b0e15] px-3 py-5 text-foreground sm:px-6">
@@ -409,6 +411,8 @@ export function ControlPage() {
             <BroadcastTab
               maintenanceScope={maintenanceScope}
               onScopeChange={setMaintenanceScope}
+              scheduledEnd={maintenanceEnd}
+              onScheduledEndChange={setMaintenanceEnd}
               bannerText={bannerText}
               setBannerText={setBannerText}
               bannerTtl={bannerTtl}
@@ -634,6 +638,8 @@ function BroadcastTab({
   busyMaintenance,
   maintenanceScope,
   onScopeChange,
+  scheduledEnd,
+  onScheduledEndChange,
 }: {
   bannerText: string;
   setBannerText: (value: string) => void;
@@ -648,6 +654,8 @@ function BroadcastTab({
   busyMaintenance: boolean;
   maintenanceScope: 'both' | 'bio' | 'vip';
   onScopeChange: (scope: 'both' | 'bio' | 'vip') => void;
+  scheduledEnd: string;
+  onScheduledEndChange: (value: string) => void;
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -733,6 +741,19 @@ function BroadcastTab({
           className="mt-1.5 w-full resize-none border border-border bg-background/60 px-2.5 py-1.5 text-xs outline-none focus:border-accent/60"
           data-testid="input-maintenance-message"
         />
+        <label className="mt-3 text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Auto-reopen at (leave empty = manual end)</label>
+        <input
+          type="datetime-local"
+          value={scheduledEnd}
+          onChange={(event) => onScheduledEndChange(event.target.value)}
+          disabled={busyMaintenance}
+          min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+          className="mt-1.5 w-full border border-border bg-background/60 px-2.5 py-2 text-xs outline-none focus:border-accent/60"
+          data-testid="input-maintenance-end"
+        />
+        <div className="mt-1 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">
+          The site switches itself back ON at this exact time — no need to come back.
+        </div>
         <div className="mt-4 flex items-center gap-3">
           <button
             onClick={() => onToggleMaintenance(!maintenance.enabled)}

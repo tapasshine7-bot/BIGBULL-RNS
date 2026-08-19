@@ -226,6 +226,7 @@ interface MaintenanceState {
   enabled: boolean;
   message: string;
   scope: MaintenanceScope;
+  scheduledEnd: string | null; // ISO timestamp — maintenance auto-ends at this moment
 }
 
 async function readBanner(db: D1Database): Promise<BannerState | null> {
@@ -242,13 +243,29 @@ async function readBanner(db: D1Database): Promise<BannerState | null> {
 
 async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
   const row = await db.prepare("SELECT value FROM site_config WHERE key = 'maintenance_mode'").first<{ value: string }>();
-  if (!row) return { enabled: false, message: "", scope: "both" };
+  if (!row) return { enabled: false, message: "", scope: "both", scheduledEnd: null };
   try {
     const parsed = JSON.parse(row.value) as Partial<MaintenanceState>;
     const scope: MaintenanceScope = parsed.scope === "bio" || parsed.scope === "vip" ? parsed.scope : "both";
-    return { enabled: Boolean(parsed.enabled), message: String(parsed.message ?? ""), scope };
+    // Auto-end: if a scheduled end is set and it has passed, maintenance switches itself off.
+    let enabled = Boolean(parsed.enabled);
+    if (enabled && parsed.scheduledEnd) {
+      const end = new Date(parsed.scheduledEnd);
+      if (Number.isFinite(end.valueOf()) && end.getTime() <= Date.now()) {
+        enabled = false;
+        const reset: MaintenanceState = { enabled: false, message: String(parsed.message ?? ""), scope, scheduledEnd: null };
+        await writeConfig(db, "maintenance_mode", reset);
+        void audit(db, "Tapas123", "maintenance.auto-end", "maintenance", { scope, scheduledEnd: parsed.scheduledEnd }).catch(() => {});
+      }
+    }
+    return {
+      enabled,
+      message: String(parsed.message ?? ""),
+      scope,
+      scheduledEnd: enabled ? (parsed.scheduledEnd ?? null) : null,
+    };
   } catch {
-    return { enabled: false, message: "", scope: "both" };
+    return { enabled: false, message: "", scope: "both", scheduledEnd: null };
   }
 }
 
@@ -508,17 +525,23 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     // POST /api/admin/maintenance/toggle
     if (path === "/maintenance/toggle" && request.method === "POST") {
       const body = await request.json().catch(() => null);
-      const b = (body ?? {}) as { enabled?: unknown; message?: unknown; scope?: unknown };
+      const b = (body ?? {}) as { enabled?: unknown; message?: unknown; scope?: unknown; scheduledEnd?: unknown };
       const scope: MaintenanceScope =
         b.scope === "bio" || b.scope === "vip" ? (b.scope as MaintenanceScope) : "both";
-      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope };
+      let scheduledEnd: string | null = null;
+      const end = new Date(String(b.scheduledEnd ?? ""));
+      if (b.enabled && Number.isFinite(end.valueOf()) && end.getTime() > Date.now()) {
+        scheduledEnd = end.toISOString();
+      }
+      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope, scheduledEnd };
       await writeConfig(db, "maintenance_mode", state);
       await audit(db, "Tapas123", "maintenance.toggle", "maintenance", state, state.enabled ? "warning" : "info");
       const scopeLabel = state.scope === "bio" ? "Bio Tool" : state.scope === "vip" ? "VIP Hub" : "the whole site";
+      const endNote = scheduledEnd ? ` and auto-reopens at ${scheduledEnd.slice(0, 16).replace("T", " ")}` : "";
       await notify(
         db,
         state.enabled
-          ? `Maintenance mode is ON for ${scopeLabel} — visitors see the maintenance screen there.`
+          ? `Maintenance mode is ON for ${scopeLabel}${endNote} — visitors see the maintenance screen there.`
           : "Maintenance mode is OFF — site is live.",
         state.enabled ? "warning" : "info",
       );
@@ -630,7 +653,7 @@ export async function handleBanner(db: D1Database, request: Request): Promise<Re
     return resp;
   } catch {
     // Never break the public site: return an empty safe state.
-    return new Response(JSON.stringify({ banner: null, maintenance: { enabled: false, message: "" } }), {
+    return new Response(JSON.stringify({ banner: null, maintenance: { enabled: false, message: "", scope: "both", scheduledEnd: null } }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });

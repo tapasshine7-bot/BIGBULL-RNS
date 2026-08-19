@@ -8,14 +8,26 @@ import { useEffect } from 'react';
 import { fetchBannerState } from '@/lib/admin';
 import type { AdminMaintenance } from '@/lib/admin';
 
-function MaintenanceScreen({ message }: { message: string }) {
+function MaintenanceScreen({ message, scheduledEnd }: { message: string; scheduledEnd: string | null }) {
+  const endsAt = scheduledEnd
+    ? (() => {
+        const d = new Date(scheduledEnd);
+        return Number.isNaN(d.valueOf())
+          ? null
+          : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+      })()
+    : null;
   return (
     <div className="route-in mx-auto grid min-h-[70vh] max-w-[560px] place-items-center text-center">
       <div className="border border-amber-300/50 bg-card/75 p-8">
         <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode / Bio Tool</div>
         <h2 className="text-display text-xl font-bold uppercase tracking-wider">Bio Tool is temporarily offline</h2>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">{message || 'We are performing scheduled maintenance. It will be back shortly.'}</p>
-        <p className="mt-3 text-xs text-muted-foreground/80">The VIP Hub and the rest of the network are working normally.</p>
+        {endsAt ? (
+          <p className="mt-3 text-mono text-[10px] uppercase tracking-[.16em] text-amber-300">Auto-reopens at {endsAt}</p>
+        ) : (
+          <p className="mt-3 text-xs text-muted-foreground/80">The VIP Hub and the rest of the network are working normally.</p>
+        )}
       </div>
     </div>
   );
@@ -28,7 +40,7 @@ export function BioPage() {
   useEffect(() => {
     void fetchBannerState().then((state) => setMaintenance(state.maintenance));
   }, []);
-  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'bio')) return <MaintenanceScreen message={maintenance.message} />;
+  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'bio')) return <MaintenanceScreen message={maintenance.message} scheduledEnd={maintenance?.scheduledEnd ?? null} />;
   if (query.isLoading) return <QueryLoading label="CHECKING BIO TOOL NODE" />;
   if (query.isError || !query.data) return <QueryError onRetry={() => query.refetch()} label="Bio Tool unavailable." />;
   const tool = query.data;

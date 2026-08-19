@@ -5,6 +5,7 @@ import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetL
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
 import { fetchBannerState } from '@/lib/admin';
+import { Lock } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
@@ -38,18 +39,35 @@ export function GatewayPage() {
   useEffect(() => {
     // Update banner strip without blocking the dashboard render.
     let cancelled = false;
-    void fetchBannerState().then((state) => {
-      if (cancelled) return;
-      if (state.banner && state.banner.text) setBanner(state.banner.text);
-      setMaintenance(state.maintenance);
-    });
+    const load = () => {
+      void fetchBannerState().then((state) => {
+        if (cancelled) return;
+        if (state.banner && state.banner.text) setBanner(state.banner.text);
+        setMaintenance(state.maintenance);
+      });
+    };
+    load();
+    const timer = window.setInterval(load, 5000);
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
   // Scoped maintenance message for the dashboard banner strip (bio/vip/both).
   const maintenanceBanner = maintenance?.enabled && maintenance.message ? maintenance.message : null;
+
+  // Per-dashboard lock states — a card under maintenance CANNOT be opened.
+  const bioLocked = Boolean(maintenance?.enabled && (maintenance.scope === 'bio' || maintenance.scope === 'both'));
+  const vipLocked = Boolean(maintenance?.enabled && (maintenance.scope === 'vip' || maintenance.scope === 'both'));
+  const anyLocked = bioLocked || vipLocked;
+
+  function lockLabel(locked: boolean) {
+    return locked ? (maintenance?.scope === 'both' ? 'WHOLE SITE' : maintenance?.scope === 'bio' ? 'BIO TOOL' : 'VIP HUB') : null;
+  }
 
   if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />; // install hooks must come before early returns
   if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
@@ -63,6 +81,15 @@ export function GatewayPage() {
         <span className="truncate">{maintenanceBanner ?? banner}</span>
       </div>
     ) : null}
+
+    {/* Big floating caution banner — appears whenever any dashboard is under maintenance */}
+    {anyLocked && maintenance?.message ? (
+      <CautionBanner
+        message={maintenance.message}
+        scopeLabel={maintenance.scope === 'both' ? 'whole network' : maintenance.scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
+        scheduledEnd={maintenance?.scheduledEnd ?? null}
+      />
+    ) : null}
     <header className="dashboard-topbar">
       <div>
         <div className="dashboard-kicker">Player control center</div>
@@ -73,22 +100,34 @@ export function GatewayPage() {
     </header>
 
     <section className="dashboard-feature-grid" aria-label="Primary dashboards">
-      <article className="dashboard-feature-card dashboard-bio-card">
-        <div className="dashboard-card-copy">
-          <div className="dashboard-card-title-row"><h2>Bio Tool</h2><span className="dashboard-free-tag">FREE</span></div>
-          <p>Powerful bio generator and customization tool.</p>
-          <a href={bioTool.url} target="_blank" rel="noreferrer" className="dashboard-action dashboard-action-purple" data-testid="button-dashboard-bio"><span>Launch Bio Tool</span><span aria-hidden="true">→</span></a>
-        </div>
-        <div className="dashboard-card-art dashboard-bio-art" aria-hidden="true"><Atom size={92} strokeWidth={1} /></div>
-      </article>
-      <article className="dashboard-feature-card dashboard-vip-card">
-        <div className="dashboard-card-copy">
-          <div className="dashboard-card-title-row"><h2>VIP Hub</h2><span className="dashboard-free-tag dashboard-free-tag-green">FREE ACCESS</span></div>
-          <p>All partner tools in one place.<br className="hidden sm:block" /> Fast. Safe. Always Online.</p>
-          <Link href="/vip" className="dashboard-action dashboard-action-gold" data-testid="button-dashboard-vip"><span>Open VIP Hub</span><span aria-hidden="true">→</span></Link>
-        </div>
-        <div className="dashboard-card-art dashboard-vip-art" aria-hidden="true"><span>♛</span></div>
-      </article>
+      <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)}>
+        <article className="dashboard-feature-card dashboard-bio-card">
+          <div className="dashboard-card-copy">
+            <div className="dashboard-card-title-row"><h2>Bio Tool</h2><span className="dashboard-free-tag">FREE</span></div>
+            <p>Powerful bio generator and customization tool.</p>
+            {bioLocked ? (
+              <div className="dashboard-action dashboard-action-locked" aria-disabled="true" data-testid="dashboard-bio-locked"><span>Locked — under maintenance</span><Lock size={12} aria-hidden="true" /></div>
+            ) : (
+              <a href={bioTool.url} target="_blank" rel="noreferrer" className="dashboard-action dashboard-action-purple" data-testid="button-dashboard-bio"><span>Launch Bio Tool</span><span aria-hidden="true">→</span></a>
+            )}
+          </div>
+          <div className="dashboard-card-art dashboard-bio-art" aria-hidden="true"><Atom size={92} strokeWidth={1} /></div>
+        </article>
+      </LockedCardWrap>
+      <LockedCardWrap locked={vipLocked} scopeLabel={lockLabel(vipLocked)}>
+        <article className="dashboard-feature-card dashboard-vip-card">
+          <div className="dashboard-card-copy">
+            <div className="dashboard-card-title-row"><h2>VIP Hub</h2><span className="dashboard-free-tag dashboard-free-tag-green">FREE ACCESS</span></div>
+            <p>All partner tools in one place.<br className="hidden sm:block" /> Fast. Safe. Always Online.</p>
+            {vipLocked ? (
+              <div className="dashboard-action dashboard-action-locked" aria-disabled="true" data-testid="dashboard-vip-locked"><span>Locked — under maintenance</span><Lock size={12} aria-hidden="true" /></div>
+            ) : (
+              <Link href="/vip" className="dashboard-action dashboard-action-gold" data-testid="button-dashboard-vip"><span>Open VIP Hub</span><span aria-hidden="true">→</span></Link>
+            )}
+          </div>
+          <div className="dashboard-card-art dashboard-vip-art" aria-hidden="true"><span>♛</span></div>
+        </article>
+      </LockedCardWrap>
     </section>
 
     <section className="dashboard-install-section" aria-label="Install app">
@@ -148,6 +187,62 @@ function InstallAppRow() {
           <span>Menu (⋮) → <b>Site controls</b> → <b>Add to Home screen</b>, or <b>Share…</b> → <b>Add to Home screen</b></span>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Big floating caution banner (yellow/black sign style) shown when any dashboard is under maintenance. */
+function CautionBanner({ message, scopeLabel, scheduledEnd }: { message: string; scopeLabel: string; scheduledEnd: string | null }) {
+  const endsAt = scheduledEnd
+    ? (() => {
+        const d = new Date(scheduledEnd);
+        return Number.isNaN(d.valueOf())
+          ? null
+          : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+      })()
+    : null;
+  return (
+    <div className="caution-overlay" data-testid="caution-banner" aria-live="polite">
+      <div className="caution-sign">
+        <div className="caution-head">
+          <span className="caution-word">CAUTION</span>
+          <span className="caution-sub">MAINTENANCE IN PROGRESS</span>
+        </div>
+        <div className="caution-body">
+          <div className="caution-title">
+            <span className="caution-triangle" aria-hidden="true">⚠</span> {scopeLabel} is temporarily offline
+          </div>
+          <p className="caution-message">{message || 'This dashboard is being upgraded and will be back shortly.'}</p>
+          {endsAt ? (
+            <div className="caution-time">
+              <span className="caution-pulse" /> Auto-reopens at {endsAt} — no action needed
+            </div>
+          ) : (
+            <div className="caution-time">
+              <span className="caution-pulse" /> We will reopen it as soon as it is ready
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Wraps a dashboard card: dims it and blocks pointer events when it is under maintenance. */
+function LockedCardWrap({ locked, scopeLabel, children }: { locked: boolean; scopeLabel: string | null; children: React.ReactNode }) {
+  return (
+    <div
+      className={locked ? 'card-locked-wrapper' : undefined}
+      {...(locked
+        ? { 'aria-label': `${scopeLabel ?? 'This dashboard'} is under maintenance and cannot be opened` }
+        : {})}
+    >
+      {children}
+      {locked ? (
+        <div className="card-locked-tag" data-testid="card-locked-tag">
+          <span className="caution-pulse" /> {scopeLabel ?? 'LOCKED'} / MAINTENANCE
+        </div>
+      ) : null}
     </div>
   );
 }
