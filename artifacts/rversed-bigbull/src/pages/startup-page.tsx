@@ -15,17 +15,8 @@ const stages = [
 export function StartupPage() {
   const [, setLocation] = useLocation();
   const [stage, setStage] = useState(0);
-  const [guest, setGuest] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setGuest(!localStorage.getItem('rb_session'));
-  }, []);
-
-  useEffect(() => {
-    if (guest) {
-      setLocation('/login');
-      return;
-    }
     const timer = window.setInterval(() => {
       setStage((current) => {
         if (current >= stages.length - 1) {
@@ -38,9 +29,7 @@ export function StartupPage() {
     }, 260);
 
     return () => window.clearInterval(timer);
-  }, [setLocation, guest]);
-
-  if (guest === null) return null;
+  }, [setLocation]);
 
   return (
     <div className="grid min-h-[100dvh] place-items-center overflow-hidden bg-[#0b0e15] px-5 text-foreground">
