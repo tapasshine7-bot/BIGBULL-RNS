@@ -635,23 +635,53 @@
    Caution banner + locked dashboard cards (admin maintenance)
    --------------------------------------------------------------------------- */
 .caution-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-  padding: 1rem;
+  margin: 0 1rem;
+  width: calc(100% - 2rem);
+  max-width: 62rem;
+  margin-inline: auto;
+  animation: caution-in 0.35s ease-out both;
+  grid-column: 1 / -1;
 }
 .caution-sign {
-  pointer-events: auto;
-  width: min(92vw, 36rem);
-  border: 3px solid #f5c518;
-  border-radius: 8px;
-  background: #f5c518;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
-  animation: caution-in 0.35s ease-out both;
+  width: 100%;
+  border: 1px solid rgb(251 191 36 / .55);
+  border-radius: .6rem;
+  background: rgb(251 191 36 / .07);
   overflow: hidden;
+}
+/* Scoped (bio or vip): sized like one dashboard card, sits above the locked card */
+.caution-sign-compact { grid-column: span 1; }
+.caution-sign-compact .caution-word { font-size: 1.35rem; }
+.caution-sign-compact .caution-body { padding: .7rem .85rem .85rem; }
+/* Both: spans the two dashboard cards, sits above the grid */
+.caution-sign-full { grid-column: 1 / -1; }
+
+/* LIVE UPDATE variant: red megaphone ribbon style (update mode) */
+.caution-sign-caution.update-caution { border-color: #dc2626; background: rgba(220, 38, 38, .07); }
+.caution-sign-caution.update-caution .caution-head { background: #b91c1c; }
+.caution-sign-caution.update-caution .caution-word,
+.caution-sign-caution.update-caution .caution-sub { color: #fff; }
+.caution-sign-caution.update-caution .caution-body { background: #f5f5f4; color: #1c1917; }
+.caution-sign-caution.update-caution .caution-pulse { background: #1c1917; }
+.caution-megaphone { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; }
+.caution-megaphone svg { width: 1.7rem; height: 1.7rem; }
+.caution-word-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+}
+.caution-ribbon-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  padding: .35rem .9rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(220, 38, 38, .45);
 }
 @keyframes caution-in {
   from { transform: translateY(24px) scale(0.96); opacity: 0; }

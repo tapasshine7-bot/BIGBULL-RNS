@@ -222,6 +222,16 @@ export function GatewayPage() {
     </header>
 
     <section className="dashboard-feature-grid" aria-label="Primary dashboards">
+      {/* Scoped caution banner — sits directly above the Bio Tool card when Bio Tool (or whole site) is locked */}
+      {maintenance?.enabled && (maintenance.scope === 'bio' || maintenance.scope === 'both') && maintenance.message ? (
+        <CautionBanner
+          message={maintenance.message}
+          scopeLabel={maintenance.scope === 'both' ? 'whole network' : 'Bio Tool'}
+          scheduledEnd={maintenance.scheduledEnd ?? null}
+          isUpdate={isUpdateMode}
+          compact
+        />
+      ) : null}
       <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)} isUpdate={isUpdateMode}>
         <article className="dashboard-feature-card dashboard-bio-card">
           <div className="dashboard-card-copy">
@@ -236,6 +246,18 @@ export function GatewayPage() {
           <div className="dashboard-card-art dashboard-bio-art" aria-hidden="true"><Atom size={92} strokeWidth={1} /></div>
         </article>
       </LockedCardWrap>
+
+      {/* Scoped caution banner — sits above the VIP Hub card when only VIP Hub is locked */}
+      {maintenance?.enabled && maintenance.scope === 'vip' && maintenance.message ? (
+        <CautionBanner
+          message={maintenance.message}
+          scopeLabel="VIP Hub"
+          scheduledEnd={maintenance.scheduledEnd ?? null}
+          isUpdate={isUpdateMode}
+          compact
+        />
+      ) : null}
+
       <LockedCardWrap locked={vipLocked} scopeLabel={lockLabel(vipLocked)} isUpdate={isUpdateMode}>
         <article className="dashboard-feature-card dashboard-vip-card">
           <div className="dashboard-card-copy">
@@ -252,6 +274,7 @@ export function GatewayPage() {
       </LockedCardWrap>
 
       {/* Emergency key restore — directly below the VIP Hub dashboard card */}
+      {/* (grid-column: 1/-1 spans under both cards) */}
       <div className="gateway-restore-row">
         {restoreOpen ? (
           <RestoreKeyPanel
@@ -271,16 +294,6 @@ export function GatewayPage() {
         )}
       </div>
     </section>
-
-    {/* Big floating caution banner — placed below the dashboard cards so a locked card stays visible and tappable */}
-    {anyLocked && maintenance?.message ? (
-        <CautionBanner
-        message={maintenance.message}
-        scopeLabel={maintenance.scope === 'both' ? 'whole network' : maintenance.scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
-        scheduledEnd={maintenance?.scheduledEnd ?? null}
-        isUpdate={isUpdateMode}
-      />
-    ) : null}
 
     <section className="dashboard-install-section" aria-label="Install app">
       <div className="dashboard-install-inner">
@@ -347,8 +360,10 @@ function InstallAppRow() {
   );
 }
 
-/** Big floating caution banner (yellow/black sign style) shown when any dashboard is under maintenance. */
-function CautionBanner({ message, scopeLabel, scheduledEnd, isUpdate }: { message: string; scopeLabel: string; scheduledEnd: string | null; isUpdate?: boolean }) {
+/** Big caution banner (yellow/black sign style) shown when any dashboard is under maintenance.
+ *  compact=true → sized like a single dashboard card (scoped maintenance, sits above the locked card).
+ *  compact=false → spans both cards (whole-site maintenance, sits above the dashboard grid). */
+function CautionBanner({ message, scopeLabel, scheduledEnd, isUpdate, compact }: { message: string; scopeLabel: string; scheduledEnd: string | null; isUpdate?: boolean; compact?: boolean }) {
   const endsAt = scheduledEnd
     ? (() => {
         const d = new Date(scheduledEnd);
@@ -359,27 +374,55 @@ function CautionBanner({ message, scopeLabel, scheduledEnd, isUpdate }: { messag
     : null;
   return (
     <div className="caution-overlay" data-testid="caution-banner" aria-live="polite">
-      <div className="caution-sign">
-        <div className="caution-head">
-          <span className="caution-word">CAUTION</span>
-          <span className="caution-sub">{isUpdate ? 'UPDATE IN PROGRESS' : 'MAINTENANCE IN PROGRESS'}</span>
-        </div>
-        <div className="caution-body">
-          <div className="caution-title">
-            <span className="caution-triangle" aria-hidden="true">⚠</span> {scopeLabel} is temporarily offline
+      {isUpdate ? (
+        /* LIVE UPDATE variant — big red megaphone ribbon, same size/placement rules as the caution banner */
+        <div className={`caution-sign update-caution ${compact ? 'caution-sign-compact' : 'caution-sign-full'}`}>
+          <div className="caution-head">
+            <span className="caution-ribbon-strip">
+              <Megaphone size={20} aria-hidden="true" /> LIVE UPDATE
+            </span>
+            <span className="caution-sub">Update is live</span>
           </div>
-          <p className="caution-message">{message || 'This dashboard is being upgraded and will be back shortly.'}</p>
-          {endsAt ? (
-            <div className="caution-time">
-              <span className="caution-pulse" /> Auto-reopens at {endsAt} — no action needed
+          <div className="caution-body">
+            <div className="caution-title">
+              <Megaphone size={16} aria-hidden="true" className="text-red-600" /> {scopeLabel} is getting a fresh upgrade
             </div>
-          ) : (
-            <div className="caution-time">
-              <span className="caution-pulse" /> We will reopen it as soon as it is ready
-            </div>
-          )}
+            <p className="caution-message">{message || 'This dashboard is being upgraded and will be back shortly.'}</p>
+            {endsAt ? (
+              <div className="caution-time">
+                <span className="caution-pulse" /> Back at {endsAt} — no action needed
+              </div>
+            ) : (
+              <div className="caution-time">
+                <span className="caution-pulse" /> We will bring it back as soon as it is ready
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* CAUTION variant — yellow/black sign style (maintenance) */
+        <div className={`caution-sign ${compact ? 'caution-sign-compact' : 'caution-sign-full'}`}>
+          <div className="caution-head">
+            <span className="caution-word">CAUTION</span>
+            <span className="caution-sub">MAINTENANCE IN PROGRESS</span>
+          </div>
+          <div className="caution-body">
+            <div className="caution-title">
+              <span className="caution-triangle" aria-hidden="true">⚠</span> {scopeLabel} is temporarily offline
+            </div>
+            <p className="caution-message">{message || 'This dashboard is being upgraded and will be back shortly.'}</p>
+            {endsAt ? (
+              <div className="caution-time">
+                <span className="caution-pulse" /> Auto-reopens at {endsAt} — no action needed
+              </div>
+            ) : (
+              <div className="caution-time">
+                <span className="caution-pulse" /> We will reopen it as soon as it is ready
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
