@@ -1185,6 +1185,26 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       await audit(db, "Tapas123", "gateway.music.update", "site_config", { url: url || "(cleared)" }).catch(() => {});
       return safeJson(200, { ok: true, url: url || null }, request);
     }
+    // GET /api/admin/ff-api-key — FreeFireApi key used by the UID deep lookup (returns masked)
+    if (path === "/ff-api-key" && request.method === "GET") {
+      recordVisit(db, "/api/admin/ff-api-key", deviceFingerprint(request));
+      const row = await db.prepare("SELECT value FROM site_config WHERE key = 'ff_api_key'").first<{ value: string }>();
+      const v = row?.value ?? "";
+      return safeJson(200, { ok: true, key: v, masked: v ? `${v.slice(0, 4)}••••${v.slice(-3)}` : null }, request);
+    }
+    // POST /api/admin/ff-api-key — set the FreeFireApi key (siambhau69.eu.cc) for full UID profiles; empty clears
+    if (path === "/ff-api-key" && request.method === "POST") {
+      recordVisit(db, "/api/admin/ff-api-key", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { key?: unknown };
+      const key = typeof parsed.key === "string" ? parsed.key.trim().slice(0, 80) : "";
+      if (key === "") {
+        await db.prepare("DELETE FROM site_config WHERE key = 'ff_api_key'").run();
+      } else {
+        await db.prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('ff_api_key', ?, ?)").bind(key, new Date().toISOString()).run();
+      }
+      await audit(db, "Tapas123", "ff.apikey.update", "site_config", { set: key !== "" }).catch(() => {});
+      return safeJson(200, { ok: true, set: key !== "" }, request);
+    }
     return safeJson(404, { ok: false, error: "Route not found" }, request);
   } catch (error) {
     const message = (error as { message?: string }).message ?? "Internal error";

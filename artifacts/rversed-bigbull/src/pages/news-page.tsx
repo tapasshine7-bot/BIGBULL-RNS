@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Newspaper, Flame, CalendarDays, Radio, ChevronDown, ChevronUp } from 'lucide-react';
 import { PageHeading, QueryError, QueryLoading, EmptyState } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 import { getNews, type NewsItem } from '@/lib/ff-api';
 
 const CATEGORY_META: Record<string, { icon: React.ReactNode; label: string; className: string }> = {
@@ -54,6 +55,8 @@ export function NewsPage() {
 
   return (
     <div className="route-in">
+      {/* Back navigation for mobile users */}
+      <BackButton />
       <PageHeading
         eyebrow="Free Fire intel / curated feed"
         title="FF News."

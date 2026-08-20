@@ -586,3 +586,11 @@ export async function getGatewayMusic(): Promise<string | null> {
     return null;
   }
 }
+
+// FF UID deep lookup API key (FreeFireApi — siambhau69.eu.cc).
+export async function adminGetFfApiKey() {
+  return adminFetch<{ ok: boolean; key?: string; masked?: string | null }>('/ff-api-key');
+}
+export async function adminPostFfApiKey(key: string) {
+  return adminFetch<{ ok: boolean; set?: boolean }>('/ff-api-key', { method: 'POST', body: JSON.stringify({ key }) });
+}

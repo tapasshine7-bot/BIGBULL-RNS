@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getGetVipHubQueryKey, useGetVipHub } from '@workspace/api-client-react';
 import { PageHeading, QueryError, QueryLoading, EmptyState } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 import { StatusPill } from '@/components/status-pill';
 import { fetchBannerState, vipPay, vipPayConfig, vipStatus, type AdminMaintenance, type VipPayConfig, type VipStatus } from '@/lib/admin';
 import { getGuides, type GuideCard } from '@/lib/ff-api';
@@ -305,6 +306,7 @@ function VipHubInner({
   );
   return (
     <div className="route-in">
+      <BackButton />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <PageHeading eyebrow="VIP partner network / all nodes" title="VIP Hub." detail="Every partner tool, one clean launch surface. Check the live status, then open the tool in a new tab." action={<div className="text-mono border border-primary/30 bg-primary/10 px-3 py-2 text-[10px] uppercase tracking-wider text-primary">{filtered.length} nodes available</div>} />
         <div className="relative w-full sm:w-auto">

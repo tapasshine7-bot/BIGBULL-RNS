@@ -79,6 +79,39 @@ export async function lookupUid(uid: string) {
   return data;
 }
 
+// Deep profile lookup — full player details (level, rank, likes, outfit, pet, guild,
+// signature, avatar banner) when the admin has configured a FreeFireApi key.
+export interface DeepProfile {
+  uid: string;
+  name: string;
+  region: string;
+  source: string;
+  level?: number;
+  exp?: number;
+  rank?: number;
+  rankPoints?: number;
+  maxRank?: number;
+  liked?: number;
+  lastLoginAt?: string;
+  createAt?: string;
+  title?: number;
+  clothes?: number[];
+  petId?: number;
+  petLevel?: number;
+  petSkinId?: number;
+  guildId?: string;
+  guildName?: string;
+  signature?: string;
+  gender?: string;
+  avatarUrl?: string;
+  error?: string;
+}
+
+export async function lookupUidDeep(uid: string): Promise<DeepProfile | null> {
+  const data = await getJson<DeepProfile | null>(`/uid/lookup-deep?uid=${encodeURIComponent(uid)}`);
+  return data;
+}
+
 // ---------------------------------------------------------------------------
 // 4. FF News
 // ---------------------------------------------------------------------------

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Search, User, MapPin, Layers, RefreshCcw, Fingerprint } from 'lucide-react';
+import { Search, User, MapPin, Layers, RefreshCcw, Fingerprint, Sword, Heart, Crown, PawPrint, Users, MessageSquare, Shield, Calendar, Star } from 'lucide-react';
 import { PageHeading, QueryLoading } from '@/components/page-kit';
-import { lookupUid } from '@/lib/ff-api';
+import { BackButton } from '@/components/back-button';
+import { lookupUid, lookupUidDeep, type DeepProfile } from '@/lib/ff-api';
 
 export function UidPage() {
   const [uid, setUid] = useState('');
   const [result, setResult] = useState<{ name: string; level: number; region: string; source: string; uid: string } | null>(null);
+  const [deep, setDeep] = useState<DeepProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -26,14 +28,22 @@ export function UidPage() {
     setError(null);
     setLoading(true);
     setHasSearched(true);
-    lookupUid(value)
-      .then((data) => {
-        if (data?.name) {
+    lookupUidDeep(value)
+      .then(async (deepData) => {
+        let final: DeepProfile | null = deepData;
+        // Deep endpoint may still resolve via the seeded fallback (source=verified) — that's fine.
+        if (!final?.name) {
+          // Fallback to the simple lookup so the card still shows when the deep API is idle.
+          const simple = await lookupUid(value);
+          if (simple?.name) final = { uid: value, name: String(simple.name), region: simple.region ?? '', source: simple.source ?? 'cached', level: Number(simple.level ?? 0) };
+        }
+        if (final?.name) {
+          setDeep(final);
           setResult({
-            name: data.name as string,
-            level: Number(data.level ?? 0),
-            region: data.region ?? '',
-            source: data.source ?? 'cached',
+            name: final.name,
+            level: Number(final.level ?? 0),
+            region: final.region ?? '',
+            source: final.source ?? 'cached',
             uid: value,
           });
           try {
@@ -42,11 +52,13 @@ export function UidPage() {
             /* storage unavailable */
           }
         } else {
+          setDeep(null);
           setResult(null);
-          setError(data?.error || 'Profile not found. Check the UID and try again.');
+          setError(deepData?.error || final?.error || 'Profile not found. Check the UID and try again.');
         }
       })
       .catch(() => {
+        setDeep(null);
         setResult(null);
         setError('Network error — please check your connection and try again.');
       })
@@ -55,6 +67,7 @@ export function UidPage() {
 
   return (
     <div className="route-in">
+      <BackButton />
       <PageHeading
         eyebrow="Free Fire utility / profile lookup"
         title="UID Lookup."
@@ -124,7 +137,57 @@ export function UidPage() {
               <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Fingerprint size={11} /> UID</div>
               <div className="mt-2 text-display text-2xl font-bold">{result.uid}</div>
             </div>
+            {deep && deep.rank ? (
+              <>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Sword size={11} /> BR Rank</div>
+                  <div className="mt-2 text-display text-2xl font-bold">#{deep.rank}</div>
+                  {deep.rankPoints ? <div className="text-mono text-[8px] uppercase tracking-[.16em] text-accent">{deep.rankPoints} pts</div> : null}
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Heart size={11} /> Likes</div>
+                  <div className="mt-2 text-display text-2xl font-bold">{deep.liked ?? '—'}</div>
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Crown size={11} /> Max Rank</div>
+                  <div className="mt-2 text-display text-2xl font-bold">{deep.maxRank ? `#${deep.maxRank}` : '—'}</div>
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><PawPrint size={11} /> Pet</div>
+                  <div className="mt-2 text-display text-2xl font-bold">{deep.petId ? `LV ${deep.petLevel ?? '?'}` : '—'}</div>
+                  {deep.petSkinId ? <div className="text-mono text-[8px] uppercase tracking-[.16em] text-accent">skin #{deep.petSkinId}</div> : null}
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Users size={11} /> Guild</div>
+                  <div className="mt-2 text-display text-2xl font-bold">{deep.guildName || '—'}</div>
+                  {deep.guildId ? <div className="text-mono text-[8px] uppercase tracking-[.16em] text-accent">id {deep.guildId}</div> : null}
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><MessageSquare size={11} /> Signature</div>
+                  <div className="mt-2 text-sm leading-5">{deep.signature || '—'}</div>
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Shield size={11} /> Account</div>
+                  <div className="mt-2 text-sm">{deep.gender ? deep.gender.replace('Gender_', '').toLowerCase() : '—'}</div>
+                  {deep.title ? <div className="text-mono text-[8px] uppercase tracking-[.16em] text-accent">title #{deep.title}</div> : null}
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Calendar size={11} /> Last Login</div>
+                  <div className="mt-2 text-sm">{deep.lastLoginAt ? new Date(Number(deep.lastLoginAt) * 1000).toLocaleDateString() : '—'}</div>
+                </div>
+                <div className="border border-border bg-card p-4">
+                  <div className="flex items-center gap-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground"><Star size={11} /> Outfit</div>
+                  <div className="mt-2 text-sm">{deep.clothes && deep.clothes.length ? `${deep.clothes.length} pieces` : '—'}</div>
+                  {deep.clothes && deep.clothes.length ? <div className="text-mono text-[8px] uppercase tracking-[.16em] text-accent">ids {deep.clothes.slice(0, 3).join(', ')}…</div> : null}
+                </div>
+              </>
+            ) : null}
           </div>
+          {deep?.avatarUrl ? (
+            <div className="mt-4 overflow-hidden border border-border bg-card">
+              <img src={deep.avatarUrl} alt="Player banner" loading="lazy" className="block w-full" onError={(event) => { (event.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+          ) : null}
           <div className="mt-4 text-mono text-[8px] uppercase tracking-[.18em] text-muted-foreground">
             Source: {result.source === 'live' ? 'live public API' : result.source === 'verified' ? 'verified admin profile — always available' : 'our cached record'} — levels update as the player keeps playing
           </div>

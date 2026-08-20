@@ -1,4 +1,4 @@
-import { FileText, Scale, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, FileText, Scale, ShieldCheck } from 'lucide-react';
 import { Link } from 'wouter';
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; children: React.ReactNode }) {
@@ -14,7 +14,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon: React.C
 
 export function PoliciesPage() {
   return (
-    <div className="route-in dashboard-page">
+    <div className="route-in dashboard-page"><BackButton />
       <header className="dashboard-topbar">
         <div>
           <div className="dashboard-kicker">Legal</div>
@@ -74,5 +74,18 @@ export function PoliciesPage() {
         <a href="mailto:support@rversedbigbull.com" className="policies-back-link">support@rversedbigbull.com</a>
       </div>
     </div>
+  );
+}
+
+function BackButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => { try { window.history.length > 1 ? window.history.back() : (window.location.href = '/gateway'); } catch { window.location.href = '/gateway'; } }}
+      aria-label="Go back to gateway"
+      className="fixed right-3 top-3 z-50 inline-flex items-center gap-1.5 border border-border bg-background/85 px-3 py-2 text-mono text-[9px] uppercase tracking-[.18em] text-foreground backdrop-blur transition hover:bg-card active:translate-y-px md:right-5 md:top-5"
+    >
+      <ArrowLeft size={13} /> Back
+    </button>
   );
 }

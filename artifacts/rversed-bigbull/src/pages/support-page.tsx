@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { fetchBannerState } from '@/lib/admin';
 import type { AdminMaintenance } from '@/lib/admin';
 
@@ -24,7 +24,7 @@ export function SupportPage() {
   const showGate = scope === 'both' || scope === 'vip';
 
   return (
-    <div className="route-in dashboard-page max-w-4xl">
+    <div className="route-in dashboard-page max-w-4xl"><BackButton />
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <div className="text-mono text-[9px] uppercase tracking-[.28em] text-muted-foreground">Helpdesk</div>
@@ -101,5 +101,18 @@ function InstagramLogo() {
       <circle cx="12" cy="12" r="3.6" stroke="#ffffff" strokeWidth="1.6" />
       <circle cx="16.8" cy="7.2" r="1.05" fill="#ffffff" />
     </svg>
+  );
+}
+
+function BackButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => { try { window.history.length > 1 ? window.history.back() : (window.location.href = '/gateway'); } catch { window.location.href = '/gateway'; } }}
+      aria-label="Go back to gateway"
+      className="fixed right-3 top-3 z-50 inline-flex items-center gap-1.5 border border-border bg-background/85 px-3 py-2 text-mono text-[9px] uppercase tracking-[.18em] text-foreground backdrop-blur transition hover:bg-card active:translate-y-px md:right-5 md:top-5"
+    >
+      <ArrowLeft size={13} /> Back
+    </button>
   );
 }

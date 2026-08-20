@@ -61,6 +61,7 @@ import { fetchBannerState, getGatewayMusic, getVisitorStats, vipRegister } from 
 import { Lock, Volume2, VolumeX } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 import { StatusPill } from '@/components/status-pill';
 
 
@@ -256,7 +257,7 @@ export function GatewayPage() {
     }
   }
 
-  return <div className="route-in dashboard-page">
+  return <div className="route-in dashboard-page"><BackButton />
     {(banner || maintenanceBanner) ? (
       <button
         type="button"

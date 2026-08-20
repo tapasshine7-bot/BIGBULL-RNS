@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Crosshair, TrendingUp, Trophy } from 'lucide-react';
 import { PageHeading, QueryError, QueryLoading } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 import { computeHeadshot } from '@/lib/ff-api';
 
 const TIER_COLORS: Record<string, string> = {
@@ -54,6 +55,8 @@ export function HeadshotPage() {
 
   return (
     <div className="route-in">
+      {/* Back navigation for mobile users */}
+      <BackButton />
       <PageHeading
         eyebrow="Free Fire utility / skill meter"
         title="Headshot % Calculator."

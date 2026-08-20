@@ -202,6 +202,32 @@ export async function handleHeadshotCompute(ctx: FfToolsContext, params: URLSear
 // ---------------------------------------------------------------------------
 // 3. UID lookup (public FF profile API with cache fallback)
 // ---------------------------------------------------------------------------
+// Fetch the FULL profile from the FreeFireApi service (siambhau/FreeFireApi) when an API key
+// is configured in site_config (key 'ff_api_key'). Falls back to live name/region only.
+async function ffApiFullProfile(
+  uid: string,
+  apiKey: string,
+  region: string,
+): Promise<Record<string, unknown> | null> {
+  const url = `http://siambhau69.eu.cc/freefireinfo/bhau?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}&key=${encodeURIComponent(apiKey)}`;
+  try {
+    const resp = await fetch(url, { method: "GET", cf: { cacheTtl: 300 } });
+    if (!resp.ok) return null;
+    const ct = resp.headers.get("content-type") ?? "";
+    if (ct.includes("image")) return null;
+    let data: unknown;
+    try {
+      data = await resp.json();
+    } catch {
+      return null;
+    }
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return obj.basicInfo ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
 // Lookup a player profile via the free BD Games bazaar endpoint (works without API keys).
 // Response shape: { region, nickname, ... } on success; a { url } captcha JSON on challenge.
 async function ffLookupUpstream(uid: string): Promise<{ name: string; region: string } | null> {
@@ -265,7 +291,7 @@ export async function handleUidLookup(ctx: FfToolsContext, params: URLSearchPara
     // fall through to cache
   }
   // Fallback: admin-seeded profile (guaranteed to resolve).
-  const seeded = await ctx.db.prepare("SELECT uid, name, region, created_at FROM uid_seed WHERE uid = ?").bind(uid).first<{ uid: string; name: string; region: string }>();
+  const seeded = await ctx.db.prepare("SELECT uid, name, region, created_at FROM uid_seed WHERE uid = ?").bind(uid).first<{ uid: string; name: string; region: string; created_at: string }>();
   if (seeded) {
     return safeJson(200, { uid, name: seeded.name, level: 0, region: seeded.region ?? "IND", source: "verified", fetchedAt: seeded.created_at }, ctx.request);
   }
@@ -275,6 +301,110 @@ export async function handleUidLookup(ctx: FfToolsContext, params: URLSearchPara
     return safeJson(200, { uid, name: cached.name, level: Number(cached.level ?? 0), region: cached.region ?? "", source: "cached", fetchedAt: cached.fetched_at }, ctx.request);
   }
   return safeJson(404, { ok: false, error: "Profile not found. Check the UID or try again later." }, ctx.request);
+}
+
+// Deep profile lookup: name + region + the FreeFireApi full profile when an admin
+// API key is configured. Falls back to the simple live lookup so it never errors out.
+async function ffLookupDeep(uid: string): Promise<Record<string, unknown> | null> {
+  let apiKey: string | null = null;
+  try {
+    const row = await ctxForDeep?.db.prepare("SELECT value FROM site_config WHERE key = 'ff_api_key'").first<{ value: string }>();
+    apiKey = row?.value?.trim() || null;
+  } catch {
+    apiKey = null;
+  }
+  if (!apiKey) return null;
+  let live: { name: string; region: string } | null = null;
+  try {
+    live = await ffLookupUpstream(uid);
+  } catch {
+    live = null;
+  }
+  const regionGuess = live?.region || "IND";
+  let full: Record<string, unknown> | null = null;
+  // Try region=IND first; if the profile lives elsewhere the API returns an error,
+  // so retry with the live-detected region if it differs.
+  try {
+    full = await ffApiFullProfile(uid, apiKey, "IND");
+    if (!full && regionGuess !== "IND") full = await ffApiFullProfile(uid, apiKey, regionGuess);
+  } catch {
+    full = null;
+  }
+  if (!full) {
+    if (live) return { uid, name: live.name, region: live.region, source: "live" };
+    return null;
+  }
+  const basic = (full.basicInfo ?? {}) as Record<string, unknown>;
+  const profile = (full.profileInfo ?? {}) as Record<string, unknown>;
+  const clan = (full.clanBasicInfo ?? {}) as Record<string, unknown>;
+  const pet = (full.petInfo ?? {}) as Record<string, unknown>;
+  const social = (full.socialInfo ?? {}) as Record<string, unknown>;
+  const name = String(basic.nickname ?? live?.name ?? "");
+  if (!name) return live ? { uid, name: live.name, region: live.region, source: "live" } : null;
+  const regionFinal = String(basic.region ?? live?.region ?? "IND");
+  return {
+    uid,
+    name,
+    region: regionFinal,
+    source: "full",
+    level: Number(basic.level ?? 0),
+    exp: Number(basic.exp ?? 0),
+    rank: Number(basic.rank ?? 0),
+    rankPoints: Number(basic.rankingPoints ?? 0),
+    maxRank: Number(basic.maxRank ?? 0),
+    liked: Number(basic.liked ?? 0),
+    lastLoginAt: String(basic.lastLoginAt ?? ""),
+    createAt: String(basic.createAt ?? ""),
+    title: Number(basic.title ?? 0),
+    bannerId: Number(basic.bannerId ?? 0),
+    headPic: Number(basic.headPic ?? 0),
+    clothes: Array.isArray(profile.clothes) ? (profile.clothes as unknown[]).map((c) => Number(c)) : [],
+    equippedSkills: Array.isArray(profile.equipedSkills) ? (profile.equipedSkills as unknown[]).map((s) => Number(s)) : [],
+    avatarId: Number(profile.avatarId ?? 0),
+    petId: Number(pet.id ?? 0),
+    petLevel: Number(pet.level ?? 0),
+    petSkinId: Number(pet.skinId ?? 0),
+    guildId: String(clan.clanId ?? ""),
+    guildName: String(clan.clanName ?? ""),
+    signature: String(social.signature ?? ""),
+    gender: String(social.gender ?? ""),
+    avatarUrl: `http://siambhau69.eu.cc/freefireinfo/bhau?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(regionFinal)}&key=${encodeURIComponent(apiKey)}`,
+    fetchedAt: nowIso(),
+  };
+}
+
+// Module-level handle for the deep lookup helper (set by index.ts before routing).
+let ctxForDeep: FfToolsContext | null = null;
+export function setFfToolsDeepContext(c: FfToolsContext): void {
+  ctxForDeep = c;
+}
+
+export async function handleUidLookupDeep(ctx: FfToolsContext, params: URLSearchParams): Promise<Response> {
+  const uid = (params.get("uid") ?? "").trim();
+  if (!/^\d{7,12}$/.test(uid)) {
+    return safeJson(400, { ok: false, error: "Enter a valid Free Fire UID (7–12 digits)." }, ctx.request);
+  }
+  setFfToolsDeepContext(ctx);
+  const deep = await ffLookupDeep(uid);
+  if (!deep) {
+    const seeded = await ctx.db.prepare("SELECT uid, name, region, created_at FROM uid_seed WHERE uid = ?").bind(uid).first<{ uid: string; name: string; region: string; created_at: string }>();
+    if (seeded) {
+      return safeJson(200, { uid, name: seeded.name, level: 0, region: seeded.region ?? "IND", source: "verified", fetchedAt: seeded.created_at }, ctx.request);
+    }
+    return safeJson(404, { ok: false, error: "Profile not found. Check the UID or try again later." }, ctx.request);
+  }
+  // Cache the name/region for the simple endpoint too.
+  try {
+    ctx.db
+      .prepare(
+        "INSERT INTO ff_uid_cache (uid, name, level, region, fetched_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET name=excluded.name, region=excluded.region, fetched_at=excluded.fetched_at",
+      )
+      .bind(uid, String(deep.name), Number((deep as Record<string, unknown>).level ?? 0), String(deep.region ?? ""), nowIso())
+      .run();
+  } catch {
+    // ignore cache write failures
+  }
+  return safeJson(200, deep, ctx.request);
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +509,7 @@ export async function handleFfTools(db: D1Database, request: Request, path: stri
   if (path === "/headshot/tips" && request.method === "GET") return handleHeadshotTips(ctx);
   if (path === "/headshot/compute" && request.method === "GET") return handleHeadshotCompute(ctx, params);
   if (path === "/uid/lookup" && request.method === "GET") return handleUidLookup(ctx, params);
+  if (path === "/uid/lookup-deep" && request.method === "GET") return handleUidLookupDeep(ctx, params);
   if (path === "/news" && request.method === "GET") return handleNews(ctx);
   if (path === "/bio-templates" && request.method === "GET") return handleBioTemplates(ctx, params);
   if (path === "/guides" && request.method === "GET") return handleGuides(ctx);

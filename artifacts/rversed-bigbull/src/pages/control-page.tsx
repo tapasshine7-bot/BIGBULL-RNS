@@ -1,7 +1,7 @@
 // Hidden RNS Control console — no navigation link exists to this page.
 // Access: /control with admin password (Tapas123 / Tapas@1234).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import {
   Activity,
@@ -74,6 +74,8 @@ import {
   adminDeleteUidSeed,
   adminGetMusic,
   adminPostMusic,
+  adminGetFfApiKey,
+  adminPostFfApiKey,
   fetchBannerState,
   readAdminToken,
   setAdminToken,
@@ -149,7 +151,12 @@ export function ControlPage() {
   const [newSeedName, setNewSeedName] = useState('');
   const [newSeedRegion, setNewSeedRegion] = useState('IND');
   const [musicUrl, setMusicUrl] = useState('');
+  const [ffKey, setFfKey] = useState('');
+  const [ffKeyMasked, setFfKeyMasked] = useState<string | null>(null);
   const [currentMusicUrl, setCurrentMusicUrl] = useState<string | null>(null);
+  const [busyMusicUpload, setBusyMusicUpload] = useState(false);
+  const [musicUploadNote, setMusicUploadNote] = useState<string>('');
+  const musicFileInputRef = useRef<HTMLInputElement | null>(null);
   const [upiId, setUpiId] = useState('');
   const [upiName, setUpiName] = useState('');
   const [upiAmount, setUpiAmount] = useState('20');
@@ -490,6 +497,38 @@ export function ControlPage() {
     }
   }
 
+  async function uploadMusicFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setMusicUploadNote('File is larger than 10 MB - pick a smaller MP3.');
+      return;
+    }
+    setBusyMusicUpload(true);
+    setMusicUploadNote('');
+    try {
+      const form = new FormData();
+      form.append('reqtype', 'fileupload');
+      form.append('time', String(Math.floor(Date.now() / 1000)));
+      form.append('fileToUpload', file);
+      const response = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
+      const text = (await response.text()).trim();
+      if (text.startsWith('https://files.catbox.moe/')) {
+        setMusicUrl(text);
+        setMusicUploadNote('Uploaded! Now press Save to play it on the gateway.');
+      } else if (text.toLowerCase().includes('error')) {
+        setMusicUploadNote('Host rejected the file (' + text + '). Try a real MP3 under 10 MB.');
+      } else {
+        setMusicUploadNote('Upload did not return a link - try again.');
+      }
+    } catch {
+      setMusicUploadNote('Upload failed (network). Check your connection and retry.');
+    } finally {
+      setBusyMusicUpload(false);
+      if (event.target) event.target.value = '';
+    }
+  }
+
   async function saveMusicUrl() {
     const url = musicUrl.trim();
     if (url && !/^https?:\/\//i.test(url)) {
@@ -509,6 +548,20 @@ export function ControlPage() {
     }
   }
 
+  async function saveFfKey() {
+    setBusyAction('ffkey');
+    try {
+      const result = await adminPostFfApiKey(ffKey.trim());
+      if (result && (result as { ok?: boolean }).ok) {
+        setFfKeyMasked(result.set ? `${ffKey.trim().slice(0, 4)}••••${ffKey.trim().slice(-3)}` : null);
+        flash(result.set ? 'FreeFireApi key saved — UID lookup now pulls full profile details (rank, likes, outfit, pet, guild).' : 'FreeFireApi key cleared — UID lookup uses the basic public API again.');
+        setFfKey('');
+        await refreshAll();
+      } else flash((result as { error?: string } | null)?.error ?? 'Save failed.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
   async function generateKeyForUser() {
     const name = generateName.trim();
     if (!name) {
@@ -785,6 +838,16 @@ export function ControlPage() {
               onAddUidSeed={addUidSeed}
               onDeleteUidSeed={deleteUidSeed}
               onSaveMusic={saveMusicUrl}
+              busyMusicUpload={busyMusicUpload}
+              musicUploadNote={musicUploadNote}
+              musicFileInputRef={musicFileInputRef}
+              uploadMusicFile={uploadMusicFile}
+              ffKey={ffKey}
+              ffKeyMasked={ffKeyMasked}
+              onSaveFfKey={saveFfKey}
+              setFfKey={setFfKey}
+              setFfKeyMasked={setFfKeyMasked}
+              busyFfKey={busyAction === 'ffkey'}
               busyGenerate={busyAction === 'vip-generate'}
               busyApprove={busyAction?.startsWith('vip-') === true}
               busyConfig={busyAction === 'vip-config'}
@@ -1379,6 +1442,16 @@ function SiteOpsTab({
   busyBlock,
   busySeed,
   busyMusic,
+  busyMusicUpload,
+  musicUploadNote,
+  musicFileInputRef,
+  uploadMusicFile,
+  ffKey,
+  ffKeyMasked,
+  onSaveFfKey,
+  busyFfKey,
+  setFfKey,
+  setFfKeyMasked,
   busyAnnouncement,
   busyLock,
   busyRequest,
@@ -1426,6 +1499,13 @@ function SiteOpsTab({
   busyBlock: boolean;
   busySeed: boolean;
   busyMusic: boolean;
+  busyFfKey: boolean;
+  ffKey: string;
+  ffKeyMasked: string | null;
+  onSaveFfKey: () => void;
+  setFfKey: (value: string) => void;
+  setFfKeyMasked: (value: string | null) => void;
+
   onRefreshVip: () => void;
   vipBlocks: Array<Record<string, unknown>>;
   memberSearch: string;
@@ -1440,6 +1520,10 @@ function SiteOpsTab({
   musicUrl: string;
   setMusicUrl: (value: string) => void;
   currentMusicUrl: string | null;
+  busyMusicUpload: boolean;
+  musicUploadNote: string;
+  musicFileInputRef: React.MutableRefObject<HTMLInputElement | null>;
+  uploadMusicFile: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   onBlockMember: (memberKey: string, displayName: string) => void;
   onUnblockMember: (memberKey: string) => void;
   onAddUidSeed: () => void;
@@ -1933,10 +2017,27 @@ function SiteOpsTab({
           <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-accent">Gateway music — auto-plays when users open the site (MP3/any audio link)</div>
           <div className="flex gap-2">
             <input
+              ref={musicFileInputRef}
+              type="file"
+              accept="audio/*,.mp3,.wav,.m4a,.ogg"
+              onChange={uploadMusicFile}
+              className="hidden"
+              data-testid="input-music-file"
+            />
+            <button
+              type="button"
+              onClick={() => musicFileInputRef.current?.click()}
+              disabled={busyMusicUpload || busyMusic}
+              className="shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              data-testid="button-music-upload"
+            >
+              {busyMusicUpload ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyMusicUpload ? 'Uploading…' : 'Upload MP3'}
+            </button>
+            <input
               value={musicUrl}
               onChange={(event) => setMusicUrl(event.target.value)}
               maxLength={500}
-              placeholder="https://example.com/song.mp3 — leave empty to clear"
+              placeholder="https://example.com/song.mp3 — or upload a file"
               className="min-w-0 flex-1 border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
               data-testid="input-music-url"
             />
@@ -1954,7 +2055,38 @@ function SiteOpsTab({
           ) : (
             <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">No music set — gateway stays silent.</div>
           )}
+          {musicUploadNote ? (
+            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-foreground/70">{musicUploadNote}</div>
+          ) : null}
         </div>
+        {/* Free Fire UID deep lookup API key */}
+        <div className="mt-3 border border-primary/30 bg-primary/5 p-2.5">
+          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-primary">FF UID API key — unlocks full player profiles (rank, likes, outfit, pet, guild) in UID Lookup. Get your free key from the API owner's Telegram.</div>
+          <div className="flex gap-2">
+            <input
+              value={ffKey}
+              onChange={(event) => setFfKey(event.target.value)}
+              maxLength={80}
+              placeholder="Paste your FreeFireApi key here — leave empty to clear"
+              className="min-w-0 flex-1 border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-primary/60"
+              data-testid="input-ff-key"
+            />
+            <button
+              onClick={onSaveFfKey}
+              disabled={busyFfKey}
+              className="shrink-0 border border-primary/50 bg-primary/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-primary transition hover:bg-primary/20 disabled:opacity-50"
+              data-testid="button-ff-key-save"
+            >
+              {busyFfKey ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyFfKey ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {ffKeyMasked ? (
+            <div className="mt-2 truncate text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Active key: {ffKeyMasked} — UID Lookup now shows full details.</div>
+          ) : (
+            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">No key set — UID Lookup shows name and region only. Key available free from the API owner's Telegram.</div>
+          )}
+        </div>
+
       </div>
 
       {/* Tool ordering */}

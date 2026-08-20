@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { SlidersHorizontal, Gauge, RotateCcw, Target } from 'lucide-react';
 import { PageHeading, QueryError, QueryLoading } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 import { computeSensitivity, getSensitivityPresets, type SensitivityPreset } from '@/lib/ff-api';
 import { useEffect } from 'react';
 
@@ -158,6 +159,8 @@ export function SensitivityPage() {
 
   return (
     <div className="route-in">
+      {/* Back navigation for mobile users */}
+      <BackButton />
       <PageHeading
         eyebrow="Free Fire utility / device optimizer"
         title="Sensitivity Finder."

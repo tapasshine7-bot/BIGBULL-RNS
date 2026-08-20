@@ -1,6 +1,7 @@
 import { Activity, Clock3 } from 'lucide-react';
 import { getGetActivityQueryKey, useGetActivity } from '@workspace/api-client-react';
 import { EmptyState, PageHeading, QueryError, QueryLoading } from '@/components/page-kit';
+import { BackButton } from '@/components/back-button';
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -13,7 +14,9 @@ export function ActivityPage() {
   if (query.isError || !query.data) return <QueryError onRetry={() => query.refetch()} label="Activity channel unavailable." />;
 
   return <div className="route-in">
-    <PageHeading
+    {/* Back navigation for mobile users */}
+      <BackButton />
+      <PageHeading
       eyebrow="Player activity / session ledger"
       title="Activity."
       detail="A clean record of public system events from your RVRSED BIGBULL gateway."
