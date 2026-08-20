@@ -4,15 +4,6 @@
 
 import { generateMemberKey } from "./index";
 
-// Portable base64 encoder for binary data stored in site_config.
-function uint8ToBase64(data: Uint8Array): string {
-  let bin = "";
-  const chunk = 8192;
-  for (let i = 0; i < data.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, Array.from(data.subarray(i, i + chunk)));
-  }
-  return btoa(bin);
-}
 
 export interface AdminContext {
   db: D1Database;
@@ -1170,65 +1161,6 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       return safeJson(200, { ok: true }, request);
     }
 
-    // GET /api/admin/music — current gateway music URL
-    if (path === "/music" && request.method === "GET") {
-      recordVisit(db, "/api/admin/music", deviceFingerprint(request));
-      const row = await db.prepare("SELECT value FROM site_config WHERE key = 'gateway_music_url'").first<{ value: string }>();
-      return safeJson(200, { url: row?.value ?? null }, request);
-    }
-    // POST /api/admin/music — set the gateway auto-play music URL (mp3/m3u8 or any audio url; empty string clears)
-    if (path === "/music" && request.method === "POST") {
-      recordVisit(db, "/api/admin/music", deviceFingerprint(request));
-      const parsed = (await request.json().catch(() => ({}))) as { url?: unknown };
-      const url = typeof parsed.url === "string" ? parsed.url.trim().slice(0, 500) : "";
-      if (!/^https?:\/\//i.test(url) && url !== "") {
-        return safeJson(400, { ok: false, error: "URL must start with http:// or https://" }, request);
-      }
-      if (url === "") {
-        await db.prepare("DELETE FROM site_config WHERE key = 'gateway_music_url'").run();
-      } else {
-        await db
-          .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('gateway_music_url', ?, ?)")
-          .bind(url, new Date().toISOString())
-          .run();
-      }
-      await audit(db, "Tapas123", "gateway.music.update", "site_config", { url: url || "(cleared)" }).catch(() => {});
-      return safeJson(200, { ok: true, url: url || null }, request);
-    }
-    // POST /api/admin/upload-music — receive an audio file from the browser and store it directly
-    // in the site database (hosted file servers block uploads from Cloudflare IPs, so we self-host).
-    // The public GET /api/music then streams the stored file to every visitor.
-    if (path === "/upload-music" && request.method === "POST") {
-      recordVisit(db, "/api/admin/upload-music", deviceFingerprint(request));
-      try {
-        const ct = request.headers.get("content-type") ?? "";
-        if (!ct.includes("multipart/form-data")) {
-          return safeJson(400, { ok: false, error: "Send the file as multipart/form-data with field name 'fileToUpload'" }, request);
-        }
-        const form = await request.formData();
-        const part = form.get("fileToUpload");
-        if (!part || typeof part === "string") {
-          return safeJson(400, { ok: false, error: "No file received — pick an MP3 from your files." }, request);
-        }
-        const file = part as File;
-        const bytes = await file.arrayBuffer();
-        if (bytes.byteLength > 10 * 1024 * 1024) {
-          return safeJson(400, { ok: false, error: "File is larger than 10 MB — pick a smaller MP3." }, request);
-        }
-        if (bytes.byteLength > 3 * 1024 * 1024) {
-          return safeJson(400, { ok: false, error: "File is larger than 3 MB — the site hosts music on its own server (limit 3 MB). Compress the MP3 (e.g. 64–128 kbps) or trim it shorter." }, request);
-        }
-        const base64 = uint8ToBase64(new Uint8Array(bytes));
-        await db
-          .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('gateway_music_blob', ?, ?)")
-          .bind(base64, new Date().toISOString())
-          .run();
-        await audit(db, "Tapas123", "gateway.music.upload", "site_config", { name: file.name, bytes: bytes.byteLength }).catch(() => {});
-        return safeJson(200, { ok: true, blob: true }, request);
-      } catch {
-        return safeJson(500, { ok: false, error: "Upload failed — check your connection and retry." }, request);
-      }
-    }
     // GET /api/admin/ff-api-key — FreeFireApi key used by the UID deep lookup (returns masked)
     if (path === "/ff-api-key" && request.method === "GET") {
       recordVisit(db, "/api/admin/ff-api-key", deviceFingerprint(request));

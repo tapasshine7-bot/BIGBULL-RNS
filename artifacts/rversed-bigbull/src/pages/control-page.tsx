@@ -72,10 +72,7 @@ import {
   adminListUidSeed,
   adminAddUidSeed,
   adminDeleteUidSeed,
-  adminGetMusic,
-  adminPostMusic,
-  adminUploadMusic,
-  adminGetFfApiKey,
+        adminGetFfApiKey,
   adminPostFfApiKey,
   fetchBannerState,
   readAdminToken,
@@ -151,13 +148,8 @@ export function ControlPage() {
   const [newSeedUid, setNewSeedUid] = useState('');
   const [newSeedName, setNewSeedName] = useState('');
   const [newSeedRegion, setNewSeedRegion] = useState('IND');
-  const [musicUrl, setMusicUrl] = useState('');
   const [ffKey, setFfKey] = useState('');
   const [ffKeyMasked, setFfKeyMasked] = useState<string | null>(null);
-  const [currentMusicUrl, setCurrentMusicUrl] = useState<string | null>(null);
-  const [busyMusicUpload, setBusyMusicUpload] = useState(false);
-  const [musicUploadNote, setMusicUploadNote] = useState<string>('');
-  const musicFileInputRef = useRef<HTMLInputElement | null>(null);
   const [upiId, setUpiId] = useState('');
   const [upiName, setUpiName] = useState('');
   const [upiAmount, setUpiAmount] = useState('20');
@@ -193,7 +185,6 @@ export function ControlPage() {
       adminVipAnalytics(),
       adminListGatewayAnnouncements(),
       adminListUidSeed(),
-      adminGetMusic(),
       adminGetFfApiKey(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
@@ -223,11 +214,6 @@ export function ControlPage() {
     if (us.status === 'fulfilled' && us.value && typeof us.value === 'object' && 'seeds' in us.value) {
       const seeds = (us.value as { seeds?: unknown }).seeds;
       if (Array.isArray(seeds)) setUidSeeds(seeds);
-    }
-    if (mu.status === 'fulfilled' && mu.value && typeof mu.value === 'object' && 'url' in mu.value) {
-      const url = (mu.value as { url?: string | null }).url;
-      setCurrentMusicUrl(url ?? null);
-      setMusicUrl(url ?? '');
     }
     if (fa.status === 'fulfilled' && fa.value && typeof fa.value === 'object' && 'masked' in fa.value) {
       const ff = fa.value as { ok?: boolean; masked?: string | null };
@@ -503,52 +489,6 @@ export function ControlPage() {
     }
   }
 
-  async function uploadMusicFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      setMusicUploadNote('File is larger than 10 MB - pick a smaller MP3.');
-      return;
-    }
-    setBusyMusicUpload(true);
-    setMusicUploadNote('');
-    try {
-      const result = await adminUploadMusic(file);
-      const ok = result && typeof result === 'object' && 'ok' in result && result.ok === true;
-      const url = result && typeof result === 'object' && 'url' in result ? (result as { url?: string }).url : undefined;
-      if (ok && url && url.startsWith('https://files.catbox.moe/')) {
-        setMusicUrl(url);
-        setMusicUploadNote('Uploaded! Now press Save to play it on the gateway.');
-      } else {
-        setMusicUploadNote((result as { error?: string } | null)?.error ?? 'Upload did not return a link - try again.');
-      }
-    } catch {
-      setMusicUploadNote('Upload failed (network). Check your connection and retry.');
-    } finally {
-      setBusyMusicUpload(false);
-      if (event.target) event.target.value = '';
-    }
-  }
-
-  async function saveMusicUrl() {
-    const url = musicUrl.trim();
-    if (url && !/^https?:\/\//i.test(url)) {
-      flash('The music link must start with http:// or https://');
-      return;
-    }
-    setBusyAction('music');
-    try {
-      const result = await adminPostMusic(url);
-      if (result && (result as { ok?: boolean }).ok) {
-        setCurrentMusicUrl(url || null);
-        flash(url ? 'Gateway music set — it auto-plays when users open the gateway.' : 'Gateway music cleared.');
-        await refreshAll();
-      } else flash((result as { error?: string } | null)?.error ?? 'Save failed.');
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
   async function saveFfKey() {
     setBusyAction('ffkey');
     try {
@@ -816,9 +756,6 @@ export function ControlPage() {
               setNewSeedName={setNewSeedName}
               newSeedRegion={newSeedRegion}
               setNewSeedRegion={setNewSeedRegion}
-              musicUrl={musicUrl}
-              setMusicUrl={setMusicUrl}
-              currentMusicUrl={currentMusicUrl}
               onRefreshVip={() => void refreshAll()}
               generateName={generateName}
               setGenerateName={setGenerateName}
@@ -838,11 +775,6 @@ export function ControlPage() {
               onUnblockMember={unblockMember}
               onAddUidSeed={addUidSeed}
               onDeleteUidSeed={deleteUidSeed}
-              onSaveMusic={saveMusicUrl}
-              busyMusicUpload={busyMusicUpload}
-              musicUploadNote={musicUploadNote}
-              musicFileInputRef={musicFileInputRef}
-              uploadMusicFile={uploadMusicFile}
               ffKey={ffKey}
               ffKeyMasked={ffKeyMasked}
               onSaveFfKey={saveFfKey}
@@ -854,7 +786,6 @@ export function ControlPage() {
               busyConfig={busyAction === 'vip-config'}
               busyBlock={busyAction?.startsWith('block-') === true}
               busySeed={busyAction === 'uid-seed-add' || busyAction?.startsWith('uid-seed-del-') === true}
-              busyMusic={busyAction === 'music'}
               busyAnnouncement={Boolean(busyAction === 'announcement' || busyAction?.startsWith('announcement-'))}
               busyLock={Boolean(busyAction === 'lock')}
               busyRequest={Boolean(busyAction?.startsWith('request-'))}
@@ -1414,9 +1345,6 @@ function SiteOpsTab({
   setNewSeedName,
   newSeedRegion,
   setNewSeedRegion,
-  musicUrl,
-  setMusicUrl,
-  currentMusicUrl,
   generateName,
   setGenerateName,
   generatedKey,
@@ -1435,18 +1363,12 @@ function SiteOpsTab({
   onUnblockMember,
   onAddUidSeed,
   onDeleteUidSeed,
-  onSaveMusic,
   onRefreshVip,
   busyGenerate,
   busyApprove,
   busyConfig,
   busyBlock,
   busySeed,
-  busyMusic,
-  busyMusicUpload,
-  musicUploadNote,
-  musicFileInputRef,
-  uploadMusicFile,
   ffKey,
   ffKeyMasked,
   onSaveFfKey,
@@ -1499,7 +1421,6 @@ function SiteOpsTab({
   busyConfig: boolean;
   busyBlock: boolean;
   busySeed: boolean;
-  busyMusic: boolean;
   busyFfKey: boolean;
   ffKey: string;
   ffKeyMasked: string | null;
@@ -1518,18 +1439,10 @@ function SiteOpsTab({
   setNewSeedName: (value: string) => void;
   newSeedRegion: string;
   setNewSeedRegion: (value: string) => void;
-  musicUrl: string;
-  setMusicUrl: (value: string) => void;
-  currentMusicUrl: string | null;
-  busyMusicUpload: boolean;
-  musicUploadNote: string;
-  musicFileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  uploadMusicFile: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   onBlockMember: (memberKey: string, displayName: string) => void;
   onUnblockMember: (memberKey: string) => void;
   onAddUidSeed: () => void;
   onDeleteUidSeed: (uid: string) => void;
-  onSaveMusic: () => void;
 }) {
   const pendingPayments = vipPayments.filter((p) => (p as { status: string }).status === 'pending');
   const blockedKeys = new Set(vipBlocks.map((b) => String((b as { member_key?: string }).member_key ?? '')));
@@ -2013,53 +1926,6 @@ function SiteOpsTab({
           </div>
         </div>
 
-        {/* Gateway music */}
-        <div className="mt-3 border border-accent/30 bg-accent/5 p-2.5">
-          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-accent">Gateway music — auto-plays when users open the site (MP3/any audio link)</div>
-          <div className="flex gap-2">
-            <input
-              ref={musicFileInputRef}
-              type="file"
-              accept="audio/*,.mp3,.wav,.m4a,.ogg"
-              onChange={uploadMusicFile}
-              className="hidden"
-              data-testid="input-music-file"
-            />
-            <button
-              type="button"
-              onClick={() => musicFileInputRef.current?.click()}
-              disabled={busyMusicUpload || busyMusic}
-              className="shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
-              data-testid="button-music-upload"
-            >
-              {busyMusicUpload ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyMusicUpload ? 'Uploading…' : 'Upload MP3'}
-            </button>
-            <input
-              value={musicUrl}
-              onChange={(event) => setMusicUrl(event.target.value)}
-              maxLength={500}
-              placeholder="https://example.com/song.mp3 — or upload a file"
-              className="min-w-0 flex-1 border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
-              data-testid="input-music-url"
-            />
-            <button
-              onClick={onSaveMusic}
-              disabled={busyMusic}
-              className="shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
-              data-testid="button-music-save"
-            >
-              {busyMusic ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyMusic ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          {currentMusicUrl ? (
-            <div className="mt-2 truncate text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Live now: {currentMusicUrl}</div>
-          ) : (
-            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">No music set — gateway stays silent.</div>
-          )}
-          {musicUploadNote ? (
-            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-foreground/70">{musicUploadNote}</div>
-          ) : null}
-        </div>
         {/* Free Fire UID deep lookup API key */}
         <div className="mt-3 border border-primary/30 bg-primary/5 p-2.5">
           <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-primary">FF UID API key — unlocks full player profiles (rank, likes, outfit, pet, guild) in UID Lookup. Get your free key from the API owner's Telegram.</div>

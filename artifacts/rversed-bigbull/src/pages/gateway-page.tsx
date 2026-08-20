@@ -57,8 +57,8 @@ function RestoreKeyPanel({ status, error, value, onChange, onClose, onConfirm }:
   );
 }
 import { useEffect, useState } from 'react';
-import { fetchBannerState, getGatewayMusic, getVisitorStats, vipRegister } from '@/lib/admin';
-import { Lock, Volume2, VolumeX } from 'lucide-react';
+import { fetchBannerState, getVisitorStats, vipRegister } from '@/lib/admin';
+import { Lock } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
 import { BackButton } from '@/components/back-button';
@@ -161,50 +161,8 @@ export function GatewayPage() {
   const [announcementOpen, setAnnouncementOpen] = useState<Announcement | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [historyTool, setHistoryTool] = useState<string | null>(null);
-  const [musicUrl, setMusicUrl] = useState<string | null>(null);
-  const [muted, setMuted] = useState(true);
 
-  // Gateway background music — admin can set it from /control. Starts muted to respect
-  // mobile browser autoplay policy; unmutes on the visitor's first tap anywhere.
-  useEffect(() => {
-    let cancelled = false;
-    let audio: HTMLAudioElement | null = null;
-    void getGatewayMusic().then((url) => {
-      if (cancelled || !url) return;
-      setMusicUrl(url);
-      try {
-        const a = new Audio(url);
-        a.loop = true;
-        a.muted = true;
-        a.volume = 0.6;
-        audio = a;
-        void a.play().catch(() => {});
-      } catch {
-        audio = null;
-      }
-    }).catch(() => {});
-    return () => {
-      cancelled = true;
-      if (audio) {
-        try { audio.pause(); audio.src = ''; } catch { /* noop */ }
-      }
-    };
-  }, []);
 
-  function toggleMute() {
-    setMuted((current) => {
-      try {
-        const audio = document.querySelector('audio') as HTMLAudioElement | null;
-        if (audio) {
-          audio.muted = !audio.muted;
-          if (!audio.muted) void audio.play().catch(() => {});
-        }
-      } catch {
-        /* noop — never break the page */
-      }
-      return !current;
-    });
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -428,17 +386,6 @@ export function GatewayPage() {
 
     {announcementOpen ? <AnnouncementModal item={announcementOpen} onClose={() => setAnnouncementOpen(null)} /> : null}
     {historyTool ? <StatusHistoryModal toolId={historyTool} toolName={gateway?.tools.find((item: { id?: string; name?: string }) => item.id === historyTool)?.name ?? historyTool} onClose={() => setHistoryTool(null)} /> : null}
-    {musicUrl ? (
-      <button
-        type="button"
-        onClick={toggleMute}
-        aria-label={muted ? 'Unmute gateway music' : 'Mute gateway music'}
-        className="fixed bottom-4 right-4 z-50 grid h-11 w-11 place-items-center border border-accent/40 bg-card/90 shadow-lg backdrop-blur transition hover:border-accent/70"
-        data-testid="button-music-toggle"
-      >
-        {muted ? <VolumeX size={18} className="text-muted-foreground" /> : <Volume2 size={18} className="text-accent" />}
-      </button>
-    ) : null}
   </div>;
 }
 

@@ -442,33 +442,6 @@ export default {
         if (ff) return corsResponse(ff, request);
       }
       if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
-      if (path === "/music") {
-        // Self-hosted uploaded music (stored base64 blob) is served directly as audio.
-        const brow = await env.db.prepare("SELECT value FROM site_config WHERE key = 'gateway_music_blob'").first<{ value: string }>();
-        if (brow?.value) {
-          try {
-            let bin = "";
-            const b64 = brow.value;
-            for (let i = 0; i < b64.length; i += 8192) {
-              bin += atob(b64.slice(i, i + 8192));
-            }
-            const len = bin.length;
-            const out = new Uint8Array(len);
-            for (let i = 0; i < len; i += 1) out[i] = bin.charCodeAt(i);
-            return corsResponse(
-              new Response(out, {
-                status: 200,
-                headers: { "content-type": "audio/mpeg", "cache-control": "public, max-age=600" },
-              }),
-              request,
-            );
-          } catch {
-            /* corrupted blob — fall through to the url lookup */
-          }
-        }
-        const mrow = await env.db.prepare("SELECT value FROM site_config WHERE key = 'gateway_music_url'").first<{ value: string }>();
-        return corsResponse(jsonResponse(200, { url: mrow?.value ?? null }), request);
-      }
       if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });
     } catch (error) {
