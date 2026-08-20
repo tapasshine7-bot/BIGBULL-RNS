@@ -240,7 +240,7 @@ async function resolveSession(db: D1Database, token: string | null): Promise<boo
     .first<{ expires_at: string }>();
   if (!row) return false;
   // Rolling expiry for smooth long sessions.
-  void db
+  await db
     .prepare("UPDATE admin_sessions SET expires_at = datetime('now', '+7 days') WHERE token = ?")
     .bind(token)
     .run();
@@ -252,14 +252,14 @@ async function resolveSession(db: D1Database, token: string | null): Promise<boo
 // ---------------------------------------------------------------------------
 
 async function audit(db: D1Database, actor: string, action: string, entity: string, metadata: unknown, severity = "info"): Promise<void> {
-  void db
+  await db
     .prepare("INSERT INTO audit_log (actor, action, entity, metadata_json, severity, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(actor, action, entity, JSON.stringify(metadata ?? {}), severity, new Date().toISOString())
     .run();
 }
 
 async function notify(db: D1Database, text: string, severity = "info"): Promise<void> {
-  void db
+  await db
     .prepare("INSERT INTO notifications (text, severity, created_at) VALUES (?, ?, ?)")
     .bind(text, severity, new Date().toISOString())
     .run();
@@ -319,7 +319,7 @@ async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
         enabled = false;
         const reset: MaintenanceState = { enabled: false, message: String(parsed.message ?? ""), scope, scheduledEnd: null };
         await writeConfig(db, "maintenance_mode", reset);
-        void audit(db, "Tapas123", "maintenance.auto-end", "maintenance", { scope, scheduledEnd: parsed.scheduledEnd }).catch(() => {});
+        await audit(db, "Tapas123", "maintenance.auto-end", "maintenance", { scope, scheduledEnd: parsed.scheduledEnd }).catch(() => {});
       }
     }
     return {
@@ -369,7 +369,7 @@ async function checkOneTarget(
     const latency = Date.now() - start;
     const status = classify(response.status, latency, target.warning_ms);
     const result = { id: target.id, status, latency_ms: latency, error: null };
-    void db
+    await db
       .prepare(
         "INSERT INTO monitor_results (target_id, status, latency_ms, status_code, error, checked_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
@@ -379,7 +379,7 @@ async function checkOneTarget(
   } catch (error) {
     const message = (error as { message?: string }).message ?? "check failed";
     const result = { id: target.id, status: "red" as const, latency_ms: null as number | null, error: message };
-    void db
+    await db
       .prepare(
         "INSERT INTO monitor_results (target_id, status, latency_ms, status_code, error, checked_at) VALUES (?, ?, ?, ?, ?, ?)",
       )
@@ -407,7 +407,7 @@ async function runAllChecks(db: D1Database): Promise<void> {
       .bind(`%${target?.name}%`)
       .all<{ id: number }>();
     if (!open || open.length === 0) {
-      void db
+      await db
         .prepare("INSERT INTO incidents (title, severity, status, created_at) VALUES (?, 'warning', 'open', ?)")
         .bind(`Tool offline: ${target?.name ?? String(red.id)} (${red.error ?? "no response"})`, new Date().toISOString())
         .run();
@@ -450,7 +450,7 @@ const ANON = "public-site";
 
 async function recordVisit(db: D1Database, path: string, device: string): Promise<void> {
   const day = new Date().toISOString().slice(0, 10);
-  void db
+  await db
     .prepare(
       "INSERT INTO visit_counters (day, path, device, requests) VALUES (?, ?, ?, 1) ON CONFLICT(day, path, device) DO UPDATE SET requests = requests + 1",
     )
@@ -507,7 +507,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     // POST /api/admin/logout
     if (path === "/logout" && request.method === "POST") {
       const token = adminToken(request);
-      if (token) void db.prepare("DELETE FROM admin_sessions WHERE token = ?").bind(token).run();
+      if (token) await db.prepare("DELETE FROM admin_sessions WHERE token = ?").bind(token).run();
       return safeJson(200, { ok: true }, request);
     }
 
@@ -684,7 +684,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
 
     // POST /api/admin/banner/clear
     if (path === "/banner/clear" && request.method === "POST") {
-      void db.prepare("DELETE FROM site_config WHERE key = 'active_banner'").run();
+      await db.prepare("DELETE FROM site_config WHERE key = 'active_banner'").run();
       await audit(db, "Tapas123", "banner.cleared", "banner", {});
       return safeJson(200, { ok: true }, request);
     }
@@ -716,10 +716,10 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const body = await request.json().catch(() => null);
       const b = (body ?? {}) as { id?: unknown; markAll?: unknown };
       if (b.markAll) {
-        void db.prepare("UPDATE notifications SET is_read = 1").run();
+        await db.prepare("UPDATE notifications SET is_read = 1").run();
         return safeJson(200, { ok: true }, request);
       }
-      if (b.id) void db.prepare("UPDATE notifications SET is_read = 1 WHERE id = ?").bind(Number(b.id)).run();
+      if (b.id) await db.prepare("UPDATE notifications SET is_read = 1 WHERE id = ?").bind(Number(b.id)).run();
       return safeJson(200, { ok: true }, request);
     }
 
@@ -782,7 +782,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const body = await request.json().catch(() => null);
       const b = (body ?? {}) as { id?: unknown };
       if (b.id) {
-        void db.prepare("DELETE FROM announcements WHERE id = ?").bind(Number(b.id)).run();
+        await db.prepare("DELETE FROM announcements WHERE id = ?").bind(Number(b.id)).run();
         await audit(db, "Tapas123", "announcement.removed", "announcement", { id: b.id });
       }
       return safeJson(200, { ok: true }, request);
@@ -813,7 +813,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const b = (body ?? {}) as { id?: unknown; action?: unknown };
       if (b.id) {
         const status = b.action === "done" ? "done" : "open";
-        void db.prepare("UPDATE tool_requests SET status = ? WHERE id = ?").bind(status, Number(b.id)).run();
+        await db.prepare("UPDATE tool_requests SET status = ? WHERE id = ?").bind(status, Number(b.id)).run();
         await audit(db, "Tapas123", "request.marked", "request", { id: b.id, status });
       }
       return safeJson(200, { ok: true }, request);
@@ -853,7 +853,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const body = await request.json().catch(() => null);
       const b = (body ?? {}) as { toolId?: unknown; position?: unknown; reset?: unknown };
       if (b.reset) {
-        void db.prepare("DELETE FROM tool_ordering").run();
+        await db.prepare("DELETE FROM tool_ordering").run();
         return safeJson(200, { ok: true }, request);
       }
       if (b.toolId) {
@@ -928,7 +928,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       if (!approve && payment.status !== "rejected") {
         await db.prepare("UPDATE vip_payments SET status = 'rejected' WHERE id = ?").bind(paymentId).run();
       }
-      void audit(db, "Tapas123", approve ? "vip.approve" : "vip.reject", payment.member_key, { paymentId, memberKey: payment.member_key }).catch(() => {});
+      await audit(db, "Tapas123", approve ? "vip.approve" : "vip.reject", payment.member_key, { paymentId, memberKey: payment.member_key }).catch(() => {});
       return safeJson(200, { ok: true }, request);
     }
 
@@ -952,7 +952,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
         .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('vip_payment_config', ?, ?)")
         .bind(JSON.stringify({ upiId, upiName, amount, qrDataUrl }), new Date().toISOString())
         .run();
-      void audit(db, "Tapas123", "vip.config.update", "site_config", { upiId, amount }).catch(() => {});
+      await audit(db, "Tapas123", "vip.config.update", "site_config", { upiId, amount }).catch(() => {});
       return safeJson(200, { ok: true }, request);
     }
 
@@ -975,7 +975,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       } else {
         await db.prepare("UPDATE vip_members SET status = 'vip', paid_at = COALESCE(paid_at, ?), approved_at = ? WHERE member_key = ?").bind(new Date().toISOString(), new Date().toISOString(), memberKey).run();
       }
-      void audit(db, "Tapas123", "vip.generate", memberKey, { displayName, email }).catch(() => {});
+      await audit(db, "Tapas123", "vip.generate", memberKey, { displayName, email }).catch(() => {});
       return safeJson(200, { ok: true, memberKey }, request);
     }
 
@@ -998,7 +998,7 @@ export async function handleBanner(db: D1Database, request: Request): Promise<Re
     const ua = request.headers.get("User-Agent") ?? "unknown";
     const device = /Mobile|Android|iPhone|iPad|iPod/i.test(ua) ? "mobile" : "desktop";
     const day = new Date().toISOString().slice(0, 10);
-    void db
+    await db
       .prepare(
         "INSERT INTO visit_counters (day, path, device, requests) VALUES (?, 'site', ?, 1) ON CONFLICT(day, path, device) DO UPDATE SET requests = requests + 1",
       )

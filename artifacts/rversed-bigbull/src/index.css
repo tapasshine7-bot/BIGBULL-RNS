@@ -915,3 +915,81 @@ html.vip-dark-mode body {
   background: #05060a;
   color: #e9e9f0;
 }
+.dashboard-free-tag-gold { color: #f5c542; border-color: rgba(245, 197, 66, .5); }
+/* ----- Partner tool cards (VIP Hub redesign) -------------------------------- */
+.partner-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: linear-gradient(145deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+  border-radius: .6rem;
+}
+.partner-icon-gold { color: #f5c542; border-color: rgba(245, 197, 66, .45); background: linear-gradient(145deg, rgba(245, 197, 66, .16), rgba(245, 197, 66, .03)); }
+.partner-icon-blue { color: #7dd3fc; border-color: rgba(125, 211, 252, .45); background: linear-gradient(145deg, rgba(125, 211, 252, .16), rgba(125, 211, 252, .03)); }
+.partner-icon-green { color: #8bf2a4; border-color: rgba(139, 242, 164, .45); background: linear-gradient(145deg, rgba(139, 242, 164, .16), rgba(139, 242, 164, .03)); }
+.partner-icon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, .45); background: linear-gradient(145deg, rgba(249, 168, 212, .16), rgba(249, 168, 212, .03)); }
+.partner-icon-purple { color: #c4b5fd; border-color: rgba(196, 181, 253, .45); background: linear-gradient(145deg, rgba(196, 181, 253, .16), rgba(196, 181, 253, .03)); }
+.partner-badge {
+  font-family: var(--app-font-mono);
+  font-size: .52rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  border: 1px solid;
+  padding: .15rem .4rem;
+  border-radius: .2rem;
+}
+.partner-badge-gold { color: #f5c542; border-color: rgba(245, 197, 66, .5); background: rgba(245, 197, 66, .08); }
+.partner-badge-blue { color: #7dd3fc; border-color: rgba(125, 211, 252, .5); background: rgba(125, 211, 252, .08); }
+.partner-badge-green { color: #8bf2a4; border-color: rgba(139, 242, 164, .5); background: rgba(139, 242, 164, .08); }
+.partner-badge-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, .5); background: rgba(249, 168, 212, .08); }
+.partner-badge-purple { color: #c4b5fd; border-color: rgba(196, 181, 253, .5); background: rgba(196, 181, 253, .08); }
+.partner-launch { border-radius: .2rem; }
+.partner-launch-gold { background: linear-gradient(135deg, #b8860b, #f5c542); color: #10121a; }
+.partner-launch-blue { background: linear-gradient(135deg, #0369a1, #7dd3fc); }
+.partner-launch-green { background: linear-gradient(135deg, #065f46, #8bf2a4); color: #10121a; }
+.partner-launch-pink { background: linear-gradient(135deg, #9d174d, #f9a8d4); }
+.partner-launch-purple { background: linear-gradient(135deg, #5b21b6, #c4b5fd); }
+.partner-card-glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 7rem;
+  width: 7rem;
+  transform: translate(2rem, -2rem) rotate(45deg);
+  opacity: .5;
+  transition: opacity .2s;
+}
+.group:hover .partner-card-glow { opacity: .85; }
+.partner-glow-gold { border: 1px solid rgba(245, 197, 66, .25); background: radial-gradient(circle at center, rgba(245, 197, 66, .12), transparent 70%); }
+.partner-glow-blue { border: 1px solid rgba(125, 211, 252, .25); background: radial-gradient(circle at center, rgba(125, 211, 252, .12), transparent 70%); }
+.partner-glow-green { border: 1px solid rgba(139, 242, 164, .25); background: radial-gradient(circle at center, rgba(139, 242, 164, .12), transparent 70%); }
+.partner-glow-pink { border: 1px solid rgba(249, 168, 212, .25); background: radial-gradient(circle at center, rgba(249, 168, 212, .12), transparent 70%); }
+.partner-glow-purple { border: 1px solid rgba(196, 181, 253, .25); background: radial-gradient(circle at center, rgba(196, 181, 253, .12), transparent 70%); }
+
+/* Emergency VIP key restore — below the dashboard cards */
+.gateway-restore-row { margin: 0 auto; width: 100%; max-width: 62rem; padding: 0 1rem; }
+.gateway-restore-trigger {
+  display: flex; align-items: center; gap: .75rem; width: 100%;
+  border: 1px dashed rgb(251 191 36 / .35); background: rgb(251 191 36 / .06);
+  padding: .65rem 1rem; border-radius: .5rem; text-align: left;
+  transition: background .15s, border-color .15s;
+}
+.gateway-restore-trigger:hover { background: rgb(251 191 36 / .12); border-color: rgb(251 191 36 / .55); }
+.gateway-restore-label { font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .16em; color: rgb(252 211 77); white-space: nowrap; }
+.gateway-restore-hint { font-size: 11px; color: rgb(161 161 170); }
+.gateway-restore-arrow { margin-left: auto; color: rgb(252 211 77 / .8); }
+.restore-panel {
+  margin-top: .5rem; border: 1px solid rgb(251 191 36 / .4); background: rgb(13 13 18 / .96);
+  border-radius: .625rem; padding: 1rem; box-shadow: 0 8px 32px rgb(0 0 0 / .45);
+}
+.restore-input {
+  width: 100%; margin-top: .75rem; border: 1px solid rgb(120 120 135 / .45); background: rgb(18 18 26);
+  border-radius: .375rem; padding: .6rem .75rem; font-family: ui-monospace, monospace;
+  font-size: 13px; letter-spacing: .08em; color: rgb(250 250 250); outline: none; transition: border-color .15s;
+}
+.restore-input:focus { border-color: rgb(251 191 36 / .7); }
+.restore-result { display: flex; align-items: center; gap: .5rem; padding: .75rem; border-radius: .5rem; font-size: 12px; }
+.restore-ok { background: rgb(34 197 94 / .14); color: rgb(134 239 172); border: 1px solid rgb(34 197 94 / .35); }

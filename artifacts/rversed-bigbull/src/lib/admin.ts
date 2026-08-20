@@ -72,7 +72,10 @@ export function bannerApiPath(): string {
 
 async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = readAdminToken();
-  const response = await fetch(adminApiPath(path), {
+  // GET calls always get a fresh server answer — no stale cached JSON after refresh.
+  const isGet = !options.method || options.method === 'GET';
+  const url = isGet ? `${adminApiPath(path)}${path.includes('?') ? '&' : '?'}cb=${Date.now()}` : adminApiPath(path);
+  const response = await fetch(url, {
     ...options,
     headers: {
       'content-type': 'application/json',

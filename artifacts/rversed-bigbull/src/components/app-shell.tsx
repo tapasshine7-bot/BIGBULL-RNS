@@ -28,10 +28,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>;
           })}
         </nav>
-        <a href="mailto:support@rversedbigbull.com" className="group mt-3 flex items-center justify-between border border-transparent px-3 py-3 text-sm text-muted-foreground transition hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground" data-testid="link-support">
+        <Link href="/support" className={`group mt-3 flex items-center justify-between border px-3 py-3 text-sm text-muted-foreground transition hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground ${location === '/support' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-transparent'}`} data-testid="link-support">
           <span className="flex items-center gap-3"><Headphones size={16} strokeWidth={1.7} /><span>Support</span></span>
-          <ChevronRight size={14} className="opacity-0 transition group-hover:opacity-100" />
-        </a>
+          <ChevronRight size={14} className={location === '/support' ? 'opacity-100' : 'opacity-0 transition group-hover:opacity-100'} />
+        </Link>
         <Link href="/policies" className={`group mt-1 flex items-center justify-between border border-transparent px-3 py-3 text-sm text-muted-foreground transition hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground ${location === '/policies' ? 'border-primary/40 bg-primary/10 text-primary' : ''}`} data-testid="link-policies">
           <span className="flex items-center gap-3"><Scale size={16} strokeWidth={1.7} /><span>Policies</span></span>
           <ChevronRight size={14} className={location === '/policies' ? 'opacity-100' : 'opacity-0 transition group-hover:opacity-100'} />

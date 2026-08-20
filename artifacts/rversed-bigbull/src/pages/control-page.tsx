@@ -621,6 +621,7 @@ export function ControlPage() {
               vipMembers={vipMembers}
               vipPayments={vipPayments}
               vipConfig={vipConfig}
+              onRefreshVip={() => void refreshAll()}
               generateName={generateName}
               setGenerateName={setGenerateName}
               generatedKey={generatedKey}
@@ -1150,6 +1151,7 @@ function SiteOpsTab({
   onGenerateKey,
   onApproveVip,
   onSaveVipConfig,
+  onRefreshVip,
   busyGenerate,
   busyApprove,
   busyConfig,
@@ -1197,8 +1199,17 @@ function SiteOpsTab({
   busyGenerate: boolean;
   busyApprove: boolean;
   busyConfig: boolean;
+  onRefreshVip: () => void;
 }) {
   const pendingPayments = vipPayments.filter((p) => (p as { status: string }).status === 'pending');
+
+  // Continuous auto-scan: keeps members, payments, stats and visitors fresh while
+  // the tab is open — safe under many simultaneous payments (read-only polling).
+  useEffect(() => {
+    const t = window.setInterval(() => void onRefreshVip(), 8000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRefreshVip]);
 
   return (
     <div className="grid gap-3 lg:grid-cols-2">

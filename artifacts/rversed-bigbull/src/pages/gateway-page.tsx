@@ -3,8 +3,60 @@ import { Atom, Check, Download, LoaderCircle, Megaphone, Smartphone } from 'luci
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
+
+function RestoreKeyPanel({ status, error, value, onChange, onClose, onConfirm }: {
+  status: null | 'loading' | 'ok' | 'err';
+  error: string;
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="restore-panel" data-testid="emergency-key-panel" role="dialog" aria-modal="true">
+      {status === 'ok' ? (
+        <div className="restore-result restore-ok">
+          <span>✓</span>
+          <span>VIP key restored — opening your VIP Hub…</span>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-mono text-[9px] uppercase tracking-[.2em] text-amber-300">Emergency access</div>
+              <div className="mt-0.5 text-sm font-semibold text-foreground">Restore your VIP key</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Paste the unique key the admin gave you (or your saved key). It works on any phone and restores your lifetime VIP access.</p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close" className="mt-1 shrink-0 text-muted-foreground hover:text-foreground">✕</button>
+          </div>
+          <input
+            type="text"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoComplete="off"
+            placeholder="RNS-XXXXX-XXXXXX"
+            value={value}
+            onChange={(event) => onChange(event.target.value.toUpperCase())}
+            className="restore-input"
+            data-testid="input-restore-key"
+          />
+          {error ? <div className="mt-2 text-[11px] leading-4 text-red-400" data-testid="text-restore-error">{error}</div> : null}
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={status === 'loading'}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-accent/60 bg-accent/15 px-4 py-2 text-mono text-[10px] uppercase tracking-[.16em] text-accent transition hover:bg-accent/25 disabled:opacity-50"
+            data-testid="button-restore-confirm"
+          >
+            {status === 'loading' ? <span className="inline-flex items-center gap-2"><LoaderCircle size={13} className="spin-slow" /> Restoring…</span> : 'Restore my VIP access'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 import { useEffect, useState } from 'react';
-import { fetchBannerState, getVisitorStats } from '@/lib/admin';
+import { fetchBannerState, getVisitorStats, vipRegister } from '@/lib/admin';
 import { Lock } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
@@ -38,6 +90,10 @@ export function GatewayPage() {
   const [bannerOpen, setBannerOpen] = useState(false);
   const [maintenance, setMaintenance] = useState<AdminMaintenance>(null);
   const [stats, setStats] = useState<{ today: { devices: number; pageViews: number } } | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreKey, setRestoreKey] = useState('');
+  const [restoreStatus, setRestoreStatus] = useState<null | 'loading' | 'ok' | 'err'>(null);
+  const [restoreError, setRestoreError] = useState('');
   useEffect(() => {
     let cancelled = false;
     void getVisitorStats().then((data) => {
@@ -97,6 +153,37 @@ export function GatewayPage() {
 
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
 
+  async function handleRestore() {
+    const key = restoreKey.trim();
+    if (!key) {
+      setRestoreError('Please paste your VIP key (RNS-XXXXX-XXXXXX).');
+      setRestoreStatus(null);
+      return;
+    }
+    setRestoreError('');
+    setRestoreStatus('loading');
+    try {
+      const result = await vipRegister('', '', key);
+      if (result.ok && result.memberKey) {
+        window.localStorage.setItem('rns_vip_key', result.memberKey);
+        window.localStorage.setItem('rbs_vip_status', result.status === 'vip' ? 'vip' : 'registered');
+        setRestoreStatus('ok');
+        window.setTimeout(() => {
+          setRestoreOpen(false);
+          setRestoreKey('');
+          setRestoreStatus(null);
+          window.location.href = '/vip';
+        }, 1400);
+      } else {
+        setRestoreStatus('err');
+        setRestoreError(result.error || 'This key could not be found. Check it and try again, or ask the admin for your key.');
+      }
+    } catch (err) {
+      setRestoreStatus('err');
+      setRestoreError('Network error. Please check your connection and try again.');
+    }
+  }
+
   return <div className="route-in dashboard-page">
     {(banner || maintenanceBanner) ? (
       <button
@@ -151,7 +238,7 @@ export function GatewayPage() {
       <LockedCardWrap locked={vipLocked} scopeLabel={lockLabel(vipLocked)}>
         <article className="dashboard-feature-card dashboard-vip-card">
           <div className="dashboard-card-copy">
-            <div className="dashboard-card-title-row"><h2>VIP Hub</h2><span className="dashboard-free-tag dashboard-free-tag-green">FREE ACCESS</span></div>
+            <div className="dashboard-card-title-row"><h2>VIP Hub</h2><span className="dashboard-free-tag dashboard-free-tag-gold">VIP — MEMBERS ONLY</span></div>
             <p>All partner tools in one place.<br className="hidden sm:block" /> Fast. Safe. Always Online.</p>
             {vipLocked ? (
               <div className="dashboard-action dashboard-action-locked" aria-disabled="true" data-testid="dashboard-vip-locked"><span>Locked — under maintenance</span><Lock size={12} aria-hidden="true" /></div>
@@ -172,6 +259,26 @@ export function GatewayPage() {
         scheduledEnd={maintenance?.scheduledEnd ?? null}
       />
     ) : null}
+
+    {/* Emergency key restore — placed below the dashboard cards (outside them). */}
+    <div className="gateway-restore-row">
+      {restoreOpen ? (
+        <RestoreKeyPanel
+          status={restoreStatus}
+          error={restoreError}
+          value={restoreKey}
+          onChange={setRestoreKey}
+          onClose={() => setRestoreOpen(false)}
+          onConfirm={handleRestore}
+        />
+      ) : (
+        <button type="button" onClick={() => setRestoreOpen(true)} className="gateway-restore-trigger" data-testid="button-emergency-key-restore">
+          <span className="gateway-restore-label">In emergency, use your VIP key</span>
+          <span className="gateway-restore-hint">Forgot your key or changed phone? Restore VIP access here.</span>
+          <span aria-hidden="true" className="gateway-restore-arrow">→</span>
+        </button>
+      )}
+    </div>
 
     <section className="dashboard-install-section" aria-label="Install app">
       <div className="dashboard-install-inner">

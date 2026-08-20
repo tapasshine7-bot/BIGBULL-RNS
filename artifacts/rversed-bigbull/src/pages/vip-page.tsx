@@ -1,4 +1,4 @@
-import { ArrowUpRight, CheckCircle2, Copy, ExternalLink, Gift, Globe2, LoaderCircle, LockKeyhole, Moon, Search, Sun, X } from 'lucide-react';
+import { ArrowUpRight, Briefcase, CheckCircle2, Copy, Crosshair, ExternalLink, Gift, Layers, LoaderCircle, LockKeyhole, Moon, Search, Smile, Sun, Swords, ThumbsUp, Wrench, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getGetVipHubQueryKey, useGetVipHub } from '@workspace/api-client-react';
@@ -315,8 +315,52 @@ function VipHubInner({
           {dark ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
-      {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : filtered.length === 0 ? <div className="border border-border bg-card p-8 text-center text-sm text-muted-foreground">No tools match “{search.trim()}”.</div> : <div className="grid gap-3 md:grid-cols-2">{  filtered.map((tool, index) => <article key={tool.id} className={`group relative overflow-hidden border border-border bg-card p-6 panel-edge transition hover:-translate-y-1 hover:border-primary/45 ${index === 0 ? 'md:row-span-2 md:p-8' : ''}`}><div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-8 border border-primary/10 transition group-hover:scale-125" /><div className="relative flex h-full flex-col"><div className="flex items-start justify-between"><div className="grid h-11 w-11 place-items-center border border-border bg-secondary text-primary">{index === 0 ? <Globe2 size={19} /> : <Gift size={19} />}</div><StatusPill status={tool.status as 'online' | 'checking' | 'warning' | 'offline'} /></div><div className="mt-8 flex-1"><div className="text-mono mb-2 text-[9px] uppercase tracking-[.2em] text-muted-foreground">Node {String(index + 1).padStart(2, '0')} / {tool.category}</div><h2 className="text-display text-3xl uppercase tracking-wider">{tool.name}</h2><p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{tool.description}</p></div><div className="mt-8 flex items-center justify-between border-t border-border pt-4"><div className="text-mono max-w-[190px] truncate text-[9px] text-muted-foreground">{tool.url}</div><a href={tool.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:translate-y-px" data-testid={`button-launch-${tool.id}`}><span>Launch</span><ArrowUpRight size={14} /></a></div></div></article>)}</div>}
+      {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : filtered.length === 0 ? <div className="border border-border bg-card p-8 text-center text-sm text-muted-foreground">No tools match “{search.trim()}”.</div> : <div className="grid gap-4 md:grid-cols-2">{filtered.map((tool, index) => <PartnerCard key={tool.id} tool={tool} index={index} />)}</div>}
       <div className="mt-8 flex items-center gap-3 text-xs text-muted-foreground"><ExternalLink size={14} className="text-accent" /> Partner tools open outside the gateway. The gateway remains available here.</div>
     </div>
   );
 }
+
+// Rich partner tool card: brand icon, name badge, description, status and launch.
+function PartnerCard({ tool, index }: { tool: { id: string; name: string; description: string; url: string; category: string; status: string; isFree?: boolean }; index: number }) {
+  const meta = TOOL_META[tool.id] ?? TOOL_META['default'];
+  const Icon = meta.icon;
+  return (
+    <article className={`partner-card group relative overflow-hidden border border-border bg-card p-6 panel-edge transition hover:-translate-y-1 hover:border-primary/45 ${index === 0 ? 'md:row-span-2 md:p-8' : ''}`}>
+      <div className={`partner-card-glow partner-glow-${meta.accent}`} aria-hidden="true" />
+      <div className="relative flex h-full flex-col">
+        <div className="flex items-start justify-between">
+          <div className={`partner-icon partner-icon-${meta.accent}`}>
+            <Icon size={22} strokeWidth={1.6} />
+          </div>
+          <StatusPill status={tool.status as 'online' | 'checking' | 'warning' | 'offline'} />
+        </div>
+        <div className="mt-7 flex-1">
+          <div className="text-mono mb-2 text-[9px] uppercase tracking-[.2em] text-muted-foreground">Node {String(index + 1).padStart(2, '0')} / {tool.category}</div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-display text-3xl uppercase tracking-wider">{tool.name}</h2>
+            <span className={`partner-badge partner-badge-${meta.accent}`}>{meta.badge}</span>
+          </div>
+          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{tool.description}</p>
+        </div>
+        <div className="mt-8 flex items-center justify-between border-t border-border pt-4">
+          <div className="text-mono max-w-[190px] truncate text-[9px] text-muted-foreground">{tool.url}</div>
+          <a href={tool.url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-bold text-primary-foreground transition hover:brightness-110 active:translate-y-px partner-launch partner-launch-${meta.accent}`} data-testid={`button-launch-${tool.id}`}>
+            <span>Launch</span><ArrowUpRight size={14} />
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+const TOOL_META: Record<string, { icon: any; accent: string; badge: string }> = {
+  'all-in-one': { icon: Layers, accent: 'gold', badge: 'ALL-IN-ONE' },
+  'ff-bind': { icon: Crosshair, accent: 'blue', badge: 'BIND' },
+  'ff-emote': { icon: Smile, accent: 'pink', badge: 'EMOTE' },
+  'ff-likes': { icon: ThumbsUp, accent: 'green', badge: 'LIKES' },
+  'gift': { icon: Gift, accent: 'purple', badge: 'GIFT' },
+  'glory': { icon: Swords, accent: 'gold', badge: 'GLORY' },
+  'reseller': { icon: Briefcase, accent: 'blue', badge: 'RESELLER' },
+  'default': { icon: Wrench, accent: 'green', badge: 'TOOL' },
+};
