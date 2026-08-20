@@ -74,6 +74,7 @@ import {
   adminDeleteUidSeed,
   adminGetMusic,
   adminPostMusic,
+  adminUploadMusic,
   adminGetFfApiKey,
   adminPostFfApiKey,
   fetchBannerState,
@@ -512,19 +513,14 @@ export function ControlPage() {
     setBusyMusicUpload(true);
     setMusicUploadNote('');
     try {
-      const form = new FormData();
-      form.append('reqtype', 'fileupload');
-      form.append('time', String(Math.floor(Date.now() / 1000)));
-      form.append('fileToUpload', file);
-      const response = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: form });
-      const text = (await response.text()).trim();
-      if (text.startsWith('https://files.catbox.moe/')) {
-        setMusicUrl(text);
+      const result = await adminUploadMusic(file);
+      const ok = result && typeof result === 'object' && 'ok' in result && result.ok === true;
+      const url = result && typeof result === 'object' && 'url' in result ? (result as { url?: string }).url : undefined;
+      if (ok && url && url.startsWith('https://files.catbox.moe/')) {
+        setMusicUrl(url);
         setMusicUploadNote('Uploaded! Now press Save to play it on the gateway.');
-      } else if (text.toLowerCase().includes('error')) {
-        setMusicUploadNote('Host rejected the file (' + text + '). Try a real MP3 under 10 MB.');
       } else {
-        setMusicUploadNote('Upload did not return a link - try again.');
+        setMusicUploadNote((result as { error?: string } | null)?.error ?? 'Upload did not return a link - try again.');
       }
     } catch {
       setMusicUploadNote('Upload failed (network). Check your connection and retry.');

@@ -575,16 +575,31 @@ export async function adminPostMusic(url: string) {
   });
 }
 
-// Public music URL (no admin token needed — used by the gateway page)
+// Public music source (no admin token needed — used by the gateway page).
+// Returns either the /api/music stream URL (admin uploaded a file, self-hosted)
+// or an external hosted URL saved in site_config.
 export async function getGatewayMusic(): Promise<string | null> {
   try {
-    const response = await fetch(`${getApiBaseUrl()}/api/music`, { cache: 'no-store' });
+    const apiBase = getApiBaseUrl();
+    const response = await fetch(`${apiBase}/api/music`, { cache: 'no-store' });
     if (!response.ok) return null;
+    const ct = response.headers.get('content-type') ?? '';
+    if (ct.startsWith('audio/')) {
+      // Self-hosted blob served directly as audio — stream it.
+      return `${apiBase}/api/music`;
+    }
     const data = (await response.json()) as { url?: string | null };
     return typeof data.url === 'string' && data.url ? data.url : null;
   } catch {
     return null;
   }
+}
+
+// Upload a music file to hosted storage via the Worker (catbox.moe blocks browser-direct CORS uploads)
+export async function adminUploadMusic(file: File) {
+  const form = new FormData();
+  form.append('fileToUpload', file, file.name || 'gateway-music.mp3');
+  return adminFetch<{ ok: boolean; url?: string; error?: string }>('/upload-music', { method: 'POST', body: form });
 }
 
 // FF UID deep lookup API key (FreeFireApi — siambhau69.eu.cc).

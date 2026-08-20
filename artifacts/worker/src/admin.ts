@@ -4,6 +4,16 @@
 
 import { generateMemberKey } from "./index";
 
+// Portable base64 encoder for binary data stored in site_config.
+function uint8ToBase64(data: Uint8Array): string {
+  let bin = "";
+  const chunk = 8192;
+  for (let i = 0; i < data.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, Array.from(data.subarray(i, i + chunk)));
+  }
+  return btoa(bin);
+}
+
 export interface AdminContext {
   db: D1Database;
 }
@@ -1184,6 +1194,40 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       }
       await audit(db, "Tapas123", "gateway.music.update", "site_config", { url: url || "(cleared)" }).catch(() => {});
       return safeJson(200, { ok: true, url: url || null }, request);
+    }
+    // POST /api/admin/upload-music — receive an audio file from the browser and store it directly
+    // in the site database (hosted file servers block uploads from Cloudflare IPs, so we self-host).
+    // The public GET /api/music then streams the stored file to every visitor.
+    if (path === "/upload-music" && request.method === "POST") {
+      recordVisit(db, "/api/admin/upload-music", deviceFingerprint(request));
+      try {
+        const ct = request.headers.get("content-type") ?? "";
+        if (!ct.includes("multipart/form-data")) {
+          return safeJson(400, { ok: false, error: "Send the file as multipart/form-data with field name 'fileToUpload'" }, request);
+        }
+        const form = await request.formData();
+        const part = form.get("fileToUpload");
+        if (!part || typeof part === "string") {
+          return safeJson(400, { ok: false, error: "No file received — pick an MP3 from your files." }, request);
+        }
+        const file = part as File;
+        const bytes = await file.arrayBuffer();
+        if (bytes.byteLength > 10 * 1024 * 1024) {
+          return safeJson(400, { ok: false, error: "File is larger than 10 MB — pick a smaller MP3." }, request);
+        }
+        if (bytes.byteLength > 900 * 1024) {
+          return safeJson(400, { ok: false, error: "File is larger than 1 MB — the site hosts music on its own server (limit 1 MB). Compress the MP3 (e.g. 128 kbps) or paste a smaller file." }, request);
+        }
+        const base64 = uint8ToBase64(new Uint8Array(bytes));
+        await db
+          .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('gateway_music_blob', ?, ?)")
+          .bind(base64, new Date().toISOString())
+          .run();
+        await audit(db, "Tapas123", "gateway.music.upload", "site_config", { name: file.name, bytes: bytes.byteLength }).catch(() => {});
+        return safeJson(200, { ok: true, blob: true }, request);
+      } catch {
+        return safeJson(500, { ok: false, error: "Upload failed — check your connection and retry." }, request);
+      }
     }
     // GET /api/admin/ff-api-key — FreeFireApi key used by the UID deep lookup (returns masked)
     if (path === "/ff-api-key" && request.method === "GET") {
