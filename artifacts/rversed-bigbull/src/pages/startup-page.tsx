@@ -54,6 +54,7 @@ export function StartupPage() {
   // Per-dashboard maintenance (bio / vip) is handled inside bio-page / vip-page themselves.
   const activeMaintenanceScope: MaintenanceScope | null =
     maintenance?.enabled && maintenance.scope === 'both' ? maintenance.scope : null;
+  const isUpdateMode = Boolean(maintenance?.enabled && maintenance.mode === 'update');
 
   if (activeMaintenanceScope) {
     return (
@@ -71,7 +72,7 @@ export function StartupPage() {
             <div className="mx-auto mb-5 grid h-14 w-14 place-items-center border border-amber-300/50 text-amber-300">
               <Wrench size={24} strokeWidth={1} className="signal-pulse" />
             </div>
-            <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode / network</div>
+            <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">{isUpdateMode ? 'Update' : 'Maintenance'} mode / network</div>
             <h1 className="text-display text-2xl font-bold uppercase tracking-wider">Temporarily offline</h1>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
               {maintenance?.message || 'We are performing scheduled maintenance. The network will be back shortly.'}

@@ -280,12 +280,14 @@ function defaultBannerState(): BannerState {
 }
 
 type MaintenanceScope = "both" | "bio" | "vip";
+type MaintenanceMode = "maintenance" | "update";
 
 interface MaintenanceState {
   enabled: boolean;
   message: string;
   scope: MaintenanceScope;
-  scheduledEnd: string | null; // ISO timestamp — maintenance auto-ends at this moment
+  mode: MaintenanceMode; // "maintenance" or "update" — both lock the scoped tools
+  scheduledEnd: string | null; // ISO timestamp — auto-ends at this moment
 }
 
 async function readBanner(db: D1Database): Promise<BannerState | null> {
@@ -307,7 +309,7 @@ async function readBanner(db: D1Database): Promise<BannerState | null> {
 
 async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
   const row = await db.prepare("SELECT value FROM site_config WHERE key = 'maintenance_mode'").first<{ value: string }>();
-  if (!row) return { enabled: false, message: "", scope: "both", scheduledEnd: null };
+  if (!row) return { enabled: false, message: "", scope: "both", mode: "maintenance", scheduledEnd: null };
   try {
     const parsed = JSON.parse(row.value) as Partial<MaintenanceState>;
     const scope: MaintenanceScope = parsed.scope === "bio" || parsed.scope === "vip" ? parsed.scope : "both";
@@ -317,19 +319,21 @@ async function readMaintenance(db: D1Database): Promise<MaintenanceState> {
       const end = new Date(parsed.scheduledEnd);
       if (Number.isFinite(end.valueOf()) && end.getTime() <= Date.now()) {
         enabled = false;
-        const reset: MaintenanceState = { enabled: false, message: String(parsed.message ?? ""), scope, scheduledEnd: null };
+        const reset: MaintenanceState = { enabled: false, message: String(parsed.message ?? ""), scope, mode: String(parsed.mode) === "update" ? "update" : "maintenance", scheduledEnd: null };
         await writeConfig(db, "maintenance_mode", reset);
         await audit(db, "Tapas123", "maintenance.auto-end", "maintenance", { scope, scheduledEnd: parsed.scheduledEnd }).catch(() => {});
       }
     }
+    const mode: MaintenanceMode = String(parsed.mode) === "update" ? "update" : "maintenance";
     return {
       enabled,
       message: String(parsed.message ?? ""),
       scope,
+      mode,
       scheduledEnd: enabled ? (parsed.scheduledEnd ?? null) : null,
     };
   } catch {
-    return { enabled: false, message: "", scope: "both", scheduledEnd: null };
+    return { enabled: false, message: "", scope: "both", mode: "maintenance", scheduledEnd: null };
   }
 }
 
@@ -613,9 +617,10 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
     // POST /api/admin/maintenance/toggle
     if (path === "/maintenance/toggle" && request.method === "POST") {
       const body = await request.json().catch(() => null);
-      const b = (body ?? {}) as { enabled?: unknown; message?: unknown; scope?: unknown; scheduledEnd?: unknown };
+      const b = (body ?? {}) as { enabled?: unknown; message?: unknown; scope?: unknown; scheduledEnd?: unknown; mode?: unknown };
       const scope: MaintenanceScope =
         b.scope === "bio" || b.scope === "vip" ? (b.scope as MaintenanceScope) : "both";
+      const mode: MaintenanceMode = String(b.mode) === "update" ? "update" : "maintenance";
       let scheduledEnd: string | null = null;
       // The frontend sends a datetime-local value (e.g. "2026-08-20T01:06") which has
       // no timezone. The admin operator is in India (IST, UTC+5:30), and the Worker
@@ -634,15 +639,16 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
           scheduledEnd = end.toISOString();
         }
       }
-      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope, scheduledEnd };
+      const state: MaintenanceState = { enabled: Boolean(b.enabled), message: String(b.message ?? ""), scope, mode, scheduledEnd };
       await writeConfig(db, "maintenance_mode", state);
       await audit(db, "Tapas123", "maintenance.toggle", "maintenance", state, state.enabled ? "warning" : "info");
       const scopeLabel = state.scope === "bio" ? "Bio Tool" : state.scope === "vip" ? "VIP Hub" : "the whole site";
       const endNote = scheduledEnd ? ` and auto-reopens at ${scheduledEnd.slice(0, 16).replace("T", " ")}` : "";
+      const modeLabel = mode === "update" ? "Update" : "Maintenance";
       await notify(
         db,
         state.enabled
-          ? `Maintenance mode is ON for ${scopeLabel}${endNote} — visitors see the maintenance screen there.`
+          ? `${modeLabel} mode is ON for ${scopeLabel}${endNote} — visitors see the ${modeLabel.toLowerCase()} screen there.`
           : "Maintenance mode is OFF — site is live.",
         state.enabled ? "warning" : "info",
       );

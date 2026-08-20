@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { fetchBannerState } from '@/lib/admin';
 import type { AdminMaintenance } from '@/lib/admin';
 
-function MaintenanceScreen({ message, scheduledEnd }: { message: string; scheduledEnd: string | null }) {
+function MaintenanceScreen({ message, scheduledEnd, isUpdate }: { message: string; scheduledEnd: string | null; isUpdate?: boolean }) {
   const endsAt = scheduledEnd
     ? (() => {
         const d = new Date(scheduledEnd);
@@ -20,7 +20,7 @@ function MaintenanceScreen({ message, scheduledEnd }: { message: string; schedul
   return (
     <div className="route-in mx-auto grid min-h-[70vh] max-w-[560px] place-items-center text-center">
       <div className="border border-amber-300/50 bg-card/75 p-8">
-        <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode / Bio Tool</div>
+        <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">{isUpdate ? 'Update' : 'Maintenance'} mode / Bio Tool</div>
         <h2 className="text-display text-xl font-bold uppercase tracking-wider">Bio Tool is temporarily offline</h2>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">{message || 'We are performing scheduled maintenance. It will be back shortly.'}</p>
         {endsAt ? (
@@ -40,7 +40,7 @@ export function BioPage() {
   useEffect(() => {
     void fetchBannerState().then((state) => setMaintenance(state.maintenance));
   }, []);
-  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'bio')) return <MaintenanceScreen message={maintenance.message} scheduledEnd={maintenance?.scheduledEnd ?? null} />;
+  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'bio')) return <MaintenanceScreen message={maintenance.message} scheduledEnd={maintenance?.scheduledEnd ?? null} isUpdate={maintenance.mode === 'update'} />;
   if (query.isLoading) return <QueryLoading label="CHECKING BIO TOOL NODE" />;
   if (query.isError || !query.data) return <QueryError onRetry={() => query.refetch()} label="Bio Tool unavailable." />;
   const tool = query.data;

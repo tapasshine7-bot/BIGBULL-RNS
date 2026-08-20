@@ -100,6 +100,7 @@ export function ControlPage() {
 
   const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string; scope: 'both' | 'bio' | 'vip' }>({ enabled: false, message: '', scope: 'both' });
   const [maintenanceScope, setMaintenanceScope] = useState<'both' | 'bio' | 'vip'>('both');
+  const [maintenanceMode, setMaintenanceMode] = useState<'maintenance' | 'update'>('maintenance');
   const [maintenanceEnd, setMaintenanceEnd] = useState<string>('');
   const [overview, setOverview] = useState<{ total: number; green: number; yellow: number; red: number; openIncidents: number; averageUptime: number } | null>(null);
   const [monitors, setMonitors] = useState<Array<{ id: number; name: string; url: string; enabled: number; latest: { status: string; latency_ms: number | null; status_code: number | null; error: string | null; checked_at: string } | null }>>([]);
@@ -225,12 +226,13 @@ export function ControlPage() {
     setBusyAction('maintenance');
     try {
       const end = next ? maintenanceEnd || null : null;
-      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''), maintenanceScope, end);
+      const result = await adminToggleMaintenance(next, maintenance.message || (next ? 'Scheduled maintenance — back shortly.' : ''), maintenanceScope, end, maintenanceMode);
       if (result && (result as { ok?: boolean }).ok) {
-        const updated = { enabled: next, message: (result as { message?: string }).message ?? maintenance.message, scope: (result as { scope?: 'both' | 'bio' | 'vip' }).scope ?? maintenanceScope, scheduledEnd: (result as { scheduledEnd?: string | null }).scheduledEnd ?? null };
+        const updated = { enabled: next, message: (result as { message?: string }).message ?? maintenance.message, scope: (result as { scope?: 'both' | 'bio' | 'vip' }).scope ?? maintenanceScope, mode: (result as { mode?: 'maintenance' | 'update' }).mode ?? maintenanceMode, scheduledEnd: (result as { scheduledEnd?: string | null }).scheduledEnd ?? null };
         setMaintenance(updated);
         const scopeName = updated.scope === 'bio' ? 'Bio Tool' : updated.scope === 'vip' ? 'VIP Hub' : 'the whole site';
-        flash(next ? `Maintenance mode is ON for ${scopeName}.` : 'Maintenance mode is OFF — site is live.');
+        const modeName = updated.mode === 'update' ? 'Update' : 'Maintenance';
+        flash(next ? `${modeName} mode is ON for ${scopeName}.` : `${modeName} mode is OFF — site is live.`);
       }
     } catch {
       flash('Could not update maintenance mode.');
@@ -573,6 +575,8 @@ export function ControlPage() {
             <BroadcastTab
               maintenanceScope={maintenanceScope}
               onScopeChange={setMaintenanceScope}
+              maintenanceMode={maintenanceMode}
+              onModeChange={setMaintenanceMode}
               scheduledEnd={maintenanceEnd}
               onScheduledEndChange={setMaintenanceEnd}
               bannerText={bannerText}
@@ -854,6 +858,8 @@ function BroadcastTab({
   busyMaintenance,
   maintenanceScope,
   onScopeChange,
+  maintenanceMode,
+  onModeChange,
   scheduledEnd,
   onScheduledEndChange,
 }: {
@@ -872,6 +878,8 @@ function BroadcastTab({
   busyMaintenance: boolean;
   maintenanceScope: 'both' | 'bio' | 'vip';
   onScopeChange: (scope: 'both' | 'bio' | 'vip') => void;
+  maintenanceMode: 'maintenance' | 'update';
+  onModeChange: (mode: 'maintenance' | 'update') => void;
   scheduledEnd: string;
   onScheduledEndChange: (value: string) => void;
 }) {
@@ -928,9 +936,31 @@ function BroadcastTab({
 
       <div className="border border-border bg-card/60 px-3.5 py-3">
         <div className="mb-3 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
-          <Wrench size={13} className="text-amber-300" /> Maintenance mode
+          <Wrench size={13} className="text-amber-300" /> Maintenance / update mode
         </div>
-        <label className="text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Which dashboard</label>
+        <label className="text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">What kind</label>
+        <div className="mt-1.5 flex gap-1.5">
+          {(['maintenance', 'update'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onModeChange(mode)}
+              disabled={busyMaintenance}
+              className={`border px-2.5 py-1 text-mono text-[8px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
+                maintenanceMode === mode
+                  ? 'border-accent/60 bg-accent/15 text-accent'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+              data-testid={`button-mode-${mode}`}
+            >
+              {mode === 'maintenance' ? 'Maintenance' : 'Update'}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">
+          Both lock the chosen dashboard — "Update" just says Update in the visitor banner instead of Maintenance.
+        </div>
+        <label className="mt-3 text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Which dashboard</label>
         <div className="mt-1.5 flex gap-1.5">
           {(['both', 'bio', 'vip'] as const).map((scope) => (
             <button
@@ -983,13 +1013,15 @@ function BroadcastTab({
             }`}
             data-testid="button-maintenance-toggle"
           >
-            <ArrowLeftRight size={11} /> {maintenance.enabled ? 'Maintenance is ON — tap to end' : 'Start maintenance mode'}
+            <ArrowLeftRight size={11} /> {maintenance.enabled
+              ? `${maintenanceMode === 'update' ? 'Update' : 'Maintenance'} is ON — tap to end`
+              : `Start ${maintenanceMode === 'update' ? 'update' : 'maintenance'} mode`}
           </button>
         </div>
         <div className="mt-4 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
           {maintenanceScope === 'both'
-            ? 'While ON, every visitor sees only the maintenance screen until you switch it off.'
-            : `While ON, only the ${maintenanceScope === 'bio' ? 'Bio Tool' : 'VIP Hub'} shows the maintenance screen — the other dashboard keeps working.`}
+            ? `While ON, every visitor sees only the ${maintenanceMode === 'update' ? 'update' : 'maintenance'} screen until you switch it off.`
+            : `While ON, only the ${maintenanceScope === 'bio' ? 'Bio Tool' : 'VIP Hub'} shows the ${maintenanceMode === 'update' ? 'update' : 'maintenance'} screen — the other dashboard keeps working.`}
         </div>
       </div>
     </div>

@@ -26,7 +26,7 @@ export function getApiBaseUrl(): string {
 
 export type AdminBanner = { text: string; expiresAt: string | null } | null;
 export type MaintenanceScope = 'both' | 'bio' | 'vip';
-export type AdminMaintenance = { enabled: boolean; message: string; scope: MaintenanceScope | null; scheduledEnd?: string | null } | null;
+export type AdminMaintenance = { enabled: boolean; message: string; scope: MaintenanceScope | null; mode?: 'maintenance' | 'update'; scheduledEnd?: string | null } | null;
 
 interface AdminSession {
   token: string | null;
@@ -164,10 +164,10 @@ export async function adminGetMaintenance() {
   return adminFetch<AdminMaintenance>('/maintenance');
 }
 
-export async function adminToggleMaintenance(enabled: boolean, message: string, scope: MaintenanceScope = 'both', scheduledEnd: string | null = null) {
-  return adminFetch<{ ok: boolean; enabled: boolean; message: string; scope: MaintenanceScope; scheduledEnd?: string | null }>('/maintenance/toggle', {
+export async function adminToggleMaintenance(enabled: boolean, message: string, scope: MaintenanceScope = 'both', scheduledEnd: string | null = null, mode: 'maintenance' | 'update' = 'maintenance') {
+  return adminFetch<{ ok: boolean; enabled: boolean; message: string; scope: MaintenanceScope; mode?: 'maintenance' | 'update'; scheduledEnd?: string | null }>('/maintenance/toggle', {
     method: 'POST',
-    body: JSON.stringify({ enabled, message, scope, scheduledEnd }),
+    body: JSON.stringify({ enabled, message, scope, scheduledEnd, mode }),
   });
 }
 

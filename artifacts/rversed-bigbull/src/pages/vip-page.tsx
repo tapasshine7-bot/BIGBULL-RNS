@@ -209,7 +209,7 @@ function VipGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MaintenanceScreen({ message, scheduledEnd }: { message: string; scheduledEnd: string | null }) {
+function MaintenanceScreen({ message, scheduledEnd, isUpdate }: { message: string; scheduledEnd: string | null; isUpdate?: boolean }) {
   const endsAt = scheduledEnd
     ? (() => {
         const d = new Date(scheduledEnd);
@@ -221,7 +221,7 @@ function MaintenanceScreen({ message, scheduledEnd }: { message: string; schedul
   return (
     <div className="route-in mx-auto grid min-h-[70vh] max-w-[560px] place-items-center text-center">
       <div className="border border-amber-300/50 bg-card/75 p-8">
-        <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">Maintenance mode / VIP Hub</div>
+        <div className="text-mono mb-3 text-[10px] uppercase tracking-[.2em] text-amber-300">{isUpdate ? 'Update' : 'Maintenance'} mode / VIP Hub</div>
         <h2 className="text-display text-xl font-bold uppercase tracking-wider">VIP Hub is temporarily offline</h2>
         <p className="mt-4 text-sm leading-6 text-muted-foreground">{message || 'We are performing scheduled maintenance. It will be back shortly.'}</p>
         {endsAt ? (
@@ -260,7 +260,7 @@ export function VipPage() {
     }
   }, [dark]);
 
-  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'vip')) return <MaintenanceScreen message={maintenance.message} scheduledEnd={maintenance?.scheduledEnd ?? null} />;
+  if (maintenance?.enabled && (maintenance.scope === 'both' || maintenance.scope === 'vip')) return <MaintenanceScreen message={maintenance.message} scheduledEnd={maintenance?.scheduledEnd ?? null} isUpdate={maintenance.mode === 'update'} />;
 
   // VIP access gate (no key → /member; not VIP → payment screen).
   return (

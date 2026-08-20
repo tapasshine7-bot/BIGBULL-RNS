@@ -136,8 +136,9 @@ export function GatewayPage() {
     };
   }, []);
 
-  // Scoped maintenance message for the dashboard banner strip (bio/vip/both).
+  // Scoped maintenance/update message for the dashboard banner strip (bio/vip/both).
   const maintenanceBanner = maintenance?.enabled && maintenance.message ? maintenance.message : null;
+  const isUpdateMode = Boolean(maintenance?.enabled && maintenance.mode === 'update');
 
   // Per-dashboard lock states — a card under maintenance CANNOT be opened.
   const bioLocked = Boolean(maintenance?.enabled && (maintenance.scope === 'bio' || maintenance.scope === 'both'));
@@ -221,7 +222,7 @@ export function GatewayPage() {
     </header>
 
     <section className="dashboard-feature-grid" aria-label="Primary dashboards">
-      <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)}>
+      <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)} isUpdate={isUpdateMode}>
         <article className="dashboard-feature-card dashboard-bio-card">
           <div className="dashboard-card-copy">
             <div className="dashboard-card-title-row"><h2>Bio Tool</h2><span className="dashboard-free-tag">FREE</span></div>
@@ -235,7 +236,7 @@ export function GatewayPage() {
           <div className="dashboard-card-art dashboard-bio-art" aria-hidden="true"><Atom size={92} strokeWidth={1} /></div>
         </article>
       </LockedCardWrap>
-      <LockedCardWrap locked={vipLocked} scopeLabel={lockLabel(vipLocked)}>
+      <LockedCardWrap locked={vipLocked} scopeLabel={lockLabel(vipLocked)} isUpdate={isUpdateMode}>
         <article className="dashboard-feature-card dashboard-vip-card">
           <div className="dashboard-card-copy">
             <div className="dashboard-card-title-row"><h2>VIP Hub</h2><span className="dashboard-free-tag dashboard-free-tag-gold">VIP — MEMBERS ONLY</span></div>
@@ -253,10 +254,11 @@ export function GatewayPage() {
 
     {/* Big floating caution banner — placed below the dashboard cards so a locked card stays visible and tappable */}
     {anyLocked && maintenance?.message ? (
-      <CautionBanner
+        <CautionBanner
         message={maintenance.message}
         scopeLabel={maintenance.scope === 'both' ? 'whole network' : maintenance.scope === 'bio' ? 'Bio Tool' : 'VIP Hub'}
         scheduledEnd={maintenance?.scheduledEnd ?? null}
+        isUpdate={isUpdateMode}
       />
     ) : null}
 
@@ -346,7 +348,7 @@ function InstallAppRow() {
 }
 
 /** Big floating caution banner (yellow/black sign style) shown when any dashboard is under maintenance. */
-function CautionBanner({ message, scopeLabel, scheduledEnd }: { message: string; scopeLabel: string; scheduledEnd: string | null }) {
+function CautionBanner({ message, scopeLabel, scheduledEnd, isUpdate }: { message: string; scopeLabel: string; scheduledEnd: string | null; isUpdate?: boolean }) {
   const endsAt = scheduledEnd
     ? (() => {
         const d = new Date(scheduledEnd);
@@ -360,7 +362,7 @@ function CautionBanner({ message, scopeLabel, scheduledEnd }: { message: string;
       <div className="caution-sign">
         <div className="caution-head">
           <span className="caution-word">CAUTION</span>
-          <span className="caution-sub">MAINTENANCE IN PROGRESS</span>
+          <span className="caution-sub">{isUpdate ? 'UPDATE IN PROGRESS' : 'MAINTENANCE IN PROGRESS'}</span>
         </div>
         <div className="caution-body">
           <div className="caution-title">
@@ -383,7 +385,7 @@ function CautionBanner({ message, scopeLabel, scheduledEnd }: { message: string;
 }
 
 /** Wraps a dashboard card: dims it and blocks pointer events when it is under maintenance. */
-function LockedCardWrap({ locked, scopeLabel, children }: { locked: boolean; scopeLabel: string | null; children: React.ReactNode }) {
+function LockedCardWrap({ locked, scopeLabel, children, isUpdate }: { locked: boolean; scopeLabel: string | null; children: React.ReactNode; isUpdate?: boolean }) {
   return (
     <div
       className={locked ? 'card-locked-wrapper' : undefined}
@@ -392,9 +394,9 @@ function LockedCardWrap({ locked, scopeLabel, children }: { locked: boolean; sco
         : {})}
     >
       {children}
-      {locked ? (
+            {locked ? (
         <div className="card-locked-tag" data-testid="card-locked-tag">
-          <span className="caution-pulse" /> {scopeLabel ?? 'LOCKED'} / MAINTENANCE
+          <span className="caution-pulse" /> {scopeLabel ?? 'LOCKED'} / {isUpdate ? 'UPDATE' : 'MAINTENANCE'}
         </div>
       ) : null}
     </div>

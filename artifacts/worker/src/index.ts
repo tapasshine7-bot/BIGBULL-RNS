@@ -111,16 +111,54 @@ interface ToolStatus {
   checkedAt: string;
 }
 
+// Browser-like headers so bot-protection frontends (e.g. Cloudflare challenge
+// pages) answer with a real 200 page instead of a 403 that looks like downtime.
+const PROBE_HEADERS = new Headers({
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml",
+  "Accept-Language": "en-US,en;q=0.9",
+});
+
 async function probeTool(tool: ToolRow): Promise<ToolStatus> {
   const checkedAt = new Date().toISOString();
-  const start = Date.now();
-  try {
-    const response = await fetch(tool.url, { method: "HEAD", redirect: "manual" });
-    const ok = response.status < 500;
-    return { id: tool.id, status: ok ? "online" : "offline", latencyMs: Date.now() - start, checkedAt };
-  } catch {
-    return { id: tool.id, status: "offline", latencyMs: null, checkedAt };
+  let lastStatus: string | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const start = Date.now();
+    try {
+      const response = await fetch(tool.url, { method: "HEAD", redirect: "manual", headers: PROBE_HEADERS, cf: { cacheTtl: 0 } });
+      if (response.status >= 200 && response.status < 400) {
+        // 2xx and 3xx (redirects) both mean the tool's own origin answered — online.
+        return { id: tool.id, status: "online", latencyMs: Date.now() - start, checkedAt };
+      }
+      lastStatus = "offline";
+      if (attempt === 0) await new Promise<void>((resolve) => setTimeout(() => resolve(), 900));
+    } catch {
+      lastStatus = "offline";
+      if (attempt === 0) await new Promise<void>((resolve) => setTimeout(() => resolve(), 900));
+    }
   }
+  // Some bot-protection stacks block HEAD requests entirely (403). A GET with
+  // browser headers often returns a real page — that means the origin is UP.
+  try {
+    const response = await fetch(tool.url, { method: "GET", redirect: "manual", headers: PROBE_HEADERS, cf: { cacheTtl: 0 } });
+    const body = await response.text().catch(() => "");
+    if (response.status < 400) {
+      // Origin answered with a real page (even a login/portal page) — online.
+      return { id: tool.id, status: "online", latencyMs: null, checkedAt };
+    }
+    if (response.status === 403 || response.status === 404) {
+      // A 403 "Just a moment..." challenge page (or similar bot gate) means the
+      // domain's server stack (DNS + edge + origin) is ALIVE — only the
+      // datacenter probe IP is being challenged. Real visitors' phones pass the
+      // challenge fine, so report ONLINE instead of a misleading OFFLINE pill.
+      if (body.length >= 200) {
+        return { id: tool.id, status: "online", latencyMs: null, checkedAt };
+      }
+    }
+  } catch {
+    /* keep offline */
+  }
+  return { id: tool.id, status: lastStatus ?? "offline", latencyMs: null, checkedAt };
 }
 
 async function probeAll(tools: ToolRow[]): Promise<{ checkedAt: string; statuses: ToolStatus[] }> {
@@ -171,7 +209,7 @@ async function handleGateway(db: D1Database, request: Request): Promise<Response
       activeSessions: 1,
     },
     tools: tools.map(toolToPublic),
-    recentActivity: [...recentActivity, ...publicActivity(3)].slice(0, 15),
+    recentActivity: recentActivity.slice(0, 15),
   });
 }
 
