@@ -1,6 +1,12 @@
 /**
- * Silent cinematic wolf entrance for RNS BigBull (Round 16).
+ * Silent cinematic wolf entrance for RNS BigBull (Round 16 v2).
  * NO audio — user explicitly removed all sound.
+ * V2 changes:
+ * - NO tap-to-start screen. Animation starts automatically on every device
+ *   (desktop AND mobile).
+ * - The wolf now RUNS like a YouTube action clip: it sprints in from the far
+ *   left edge of the screen, bounding closer (getting bigger and lower),
+ *   drifting across the horizon toward the camera before the claw impact.
  * Stages: ready -> run (180ms) -> impact (4300ms) -> revealed (5350ms).
  * On "Enter Gateway" the session flag rns_entry_done is set and the user
  * is navigated to /gateway. On subsequent page loads within the same
@@ -23,10 +29,6 @@ export function Entrance() {
   const [, navigate] = useLocation();
   const [stage, setStage] = useState<SequenceStage>("ready");
   const [sequence, setSequence] = useState(0);
-  const [hasLaunched, setHasLaunched] = useState(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return true;
-    return !window.matchMedia("(pointer: coarse), (max-width: 640px)").matches;
-  });
   const [entered, setEntered] = useState(false);
   const timersRef = useRef<number[]>([]);
 
@@ -56,11 +58,12 @@ export function Entrance() {
     ];
   }, [clearSequence]);
 
+  // Auto-start immediately on all devices — no tap screen.
   useEffect(() => {
-    if (!hasLaunched) return;
     beginSequence();
     return clearSequence;
-  }, [beginSequence, clearSequence, hasLaunched]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -79,7 +82,7 @@ export function Entrance() {
   }, [navigate]);
 
   return (
-    <main className={`entrance stage-${stage} ${entered ? "is-entered" : ""} ${hasLaunched ? "" : "is-waiting"}`}>
+    <main className={`entrance stage-${stage} ${entered ? "is-entered" : ""}`}>
       <div className="grain" aria-hidden="true" />
       <div className="backdrop" style={{ backgroundImage: `url(${BACKDROP_IMAGE})` }} aria-hidden="true" />
       <div className="vignette" aria-hidden="true" />
@@ -94,19 +97,6 @@ export function Entrance() {
         </div>
         <span className="status-line">WILD SIGNAL / ONLINE</span>
       </header>
-
-      {!hasLaunched && (
-        <section className="mobile-launch" aria-label="Start the RNS BigBull entrance">
-          <img src={CREST_IMAGE} alt="" />
-          <p>WOLF SIGNAL DETECTED</p>
-          <strong>UNLEASH THE GATEWAY</strong>
-          <button type="button" onClick={() => setHasLaunched(true)}>
-            <span>START INTRO</span>
-            <span aria-hidden="true">▶</span>
-          </button>
-          <small>TAP TO ENABLE MOTION</small>
-        </section>
-      )}
 
       <section key={`wolf-${sequence}`} className="wolf-chamber" aria-label="Animated wolf arrival">
         <div className="wolf-shadow" aria-hidden="true" />

@@ -1201,7 +1201,7 @@ html.vip-dark-mode body {
   filter: blur(16px);
   opacity: 0;
 }
-.stage-run .wolf-shadow { animation: shadow-charge 4.1s cubic-bezier(.16, .77, .16, 1) forwards; }
+.stage-run .wolf-shadow { animation: shadow-sprint 4.1s cubic-bezier(.16, .77, .16, 1) forwards; }
 
 .impact-flash {
   position: absolute;
@@ -1350,17 +1350,22 @@ html.vip-dark-mode body {
 .is-entered .access-granted { opacity: 1; pointer-events: auto; }
 
 @keyframes wolf-charge {
-  0% { opacity: 0; transform: translate3d(-50%, 33%, 0) scale(.21); filter: drop-shadow(0 22px 35px rgba(0,0,0,.9)) blur(2px); }
-  10% { opacity: .95; }
-  26% { transform: translate3d(-52%, 21%, 0) scale(.38) rotate(-.45deg); }
-  47% { transform: translate3d(-49%, 10%, 0) scale(.58) rotate(.3deg); }
-  68% { transform: translate3d(-51%, 1%, 0) scale(.78) rotate(-.2deg); }
-  87% { opacity: 1; transform: translate3d(-50%, -5%, 0) scale(1.03); filter: drop-shadow(0 24px 36px rgba(0,0,0,.95)); }
-  100% { opacity: 1; transform: translate3d(-50%, -8%, 0) scale(1.1); filter: drop-shadow(0 27px 37px rgba(0,0,0,1)); }
+  /* Wolf sprints in from off-screen left, bounding toward the camera */
+  0% { opacity: 0; transform: translate3d(-130%, 18%, 0) scale(.28); filter: drop-shadow(0 22px 35px rgba(0,0,0,.9)) blur(3px); }
+  8% { opacity: 1; transform: translate3d(-110%, 22%, 0) scale(.32) rotate(-1.5deg); }
+  20% { transform: translate3d(-85%, 26%, 0) scale(.38) rotate(.8deg); }
+  32% { transform: translate3d(-62%, 14%, 0) scale(.47) rotate(-1.2deg); }
+  44% { transform: translate3d(-40%, 18%, 0) scale(.58) rotate(.7deg); }
+  56% { transform: translate3d(-20%, 8%, 0) scale(.7) rotate(-.9deg); }
+  68% { transform: translate3d(-2%, 12%, 0) scale(.84) rotate(.5deg); }
+  80% { transform: translate3d(12%, 2%, 0) scale(.98) rotate(-.4deg); filter: drop-shadow(0 24px 36px rgba(0,0,0,.95)); }
+  92% { transform: translate3d(22%, -4%, 0) scale(1.1) rotate(.2deg); filter: drop-shadow(0 26px 37px rgba(0,0,0,1)); }
+  100% { opacity: 1; transform: translate3d(26%, -7%, 0) scale(1.18) rotate(-.3deg); filter: drop-shadow(0 28px 38px rgba(0,0,0,1)); }
 }
-@keyframes wolf-impact { to { opacity: 0; transform: translate3d(-50%, -12%, 0) scale(1.25); filter: brightness(1.7) contrast(1.45) blur(1px); } }
-@keyframes wolf-exit { from { opacity: .7; transform: translate3d(-50%, -8%, 0) scale(1.1); } to { opacity: 0; transform: translate3d(-50%, -18%, 0) scale(1.25); } }
+@keyframes wolf-impact { to { opacity: 0; transform: translate3d(30%, -14%, 0) scale(1.35); filter: brightness(1.7) contrast(1.45) blur(1px); } }
+@keyframes wolf-exit { from { opacity: .7; transform: translate3d(28%, -7%, 0) scale(1.18); } to { opacity: 0; transform: translate3d(36%, -18%, 0) scale(1.35); } }
 @keyframes shadow-charge { 0% { opacity: 0; transform: translateX(-50%) scale(.3); } 85%, 100% { opacity: .82; transform: translateX(-50%) scale(2.3); } }
+@keyframes shadow-sprint { 0% { opacity: 0; transform: translateX(-130%) scale(.3); } 30% { opacity: .6; transform: translateX(-40%) scale(.8); } 60% { opacity: .75; transform: translateX(5%) scale(1.4); } 85%, 100% { opacity: .85; transform: translateX(24%) scale(2.4); } }
 @keyframes flash { 0% { opacity: 0; } 16% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes claw-strike { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.58); } 28% { opacity: 1; } 100% { opacity: .88; transform: translate(-50%, -50%) scale(1); } }
 @keyframes claw-fade { from { opacity: .88; } to { opacity: .46; transform: translate(-50%, -50%) scale(1.04); } }
@@ -1391,15 +1396,19 @@ html.vip-dark-mode body {
 }
 
 @keyframes wolf-charge-portrait {
-  0% { opacity: 0; transform: translate3d(-50%, 24%, 0) scale(.26); filter: drop-shadow(0 22px 35px rgba(0,0,0,.9)) blur(2px); }
-  10% { opacity: .95; }
-  28% { transform: translate3d(-52%, 15%, 0) scale(.42) rotate(-.5deg); }
-  50% { transform: translate3d(-49%, 4%, 0) scale(.63) rotate(.3deg); }
-  72% { transform: translate3d(-51%, -5%, 0) scale(.86) rotate(-.2deg); }
-  100% { opacity: 1; transform: translate3d(-50%, -9%, 0) scale(1.12); filter: drop-shadow(0 27px 37px rgba(0,0,0,1)); }
+  /* Portrait: wolf sprints in from the left, bounding closer to camera */
+  0% { opacity: 0; transform: translate3d(-150%, 14%, 0) scale(.3); filter: drop-shadow(0 22px 35px rgba(0,0,0,.9)) blur(3px); }
+  8% { opacity: 1; transform: translate3d(-125%, 18%, 0) scale(.35) rotate(-1.5deg); }
+  22% { transform: translate3d(-95%, 22%, 0) scale(.42) rotate(.8deg); }
+  36% { transform: translate3d(-68%, 10%, 0) scale(.52) rotate(-1.2deg); }
+  50% { transform: translate3d(-42%, 14%, 0) scale(.64) rotate(.7deg); }
+  64% { transform: translate3d(-18%, 4%, 0) scale(.78) rotate(-.9deg); }
+  78% { transform: translate3d(-2%, 8%, 0) scale(.94) rotate(.5deg); }
+  90% { transform: translate3d(12%, -2%, 0) scale(1.08) rotate(-.4deg); filter: drop-shadow(0 26px 37px rgba(0,0,0,1)); }
+  100% { opacity: 1; transform: translate3d(18%, -6%, 0) scale(1.16) rotate(-.3deg); filter: drop-shadow(0 28px 38px rgba(0,0,0,1)); }
 }
-@keyframes wolf-impact-portrait { to { opacity: 0; transform: translate3d(-50%, -15%, 0) scale(1.28); filter: brightness(1.7) contrast(1.45) blur(1px); } }
-@keyframes wolf-exit-portrait { from { opacity: .7; transform: translate3d(-50%, -9%, 0) scale(1.12); } to { opacity: 0; transform: translate3d(-50%, -18%, 0) scale(1.3); } }
+@keyframes wolf-impact-portrait { to { opacity: 0; transform: translate3d(22%, -15%, 0) scale(1.4); filter: brightness(1.7) contrast(1.45) blur(1px); } }
+@keyframes wolf-exit-portrait { from { opacity: .7; transform: translate3d(20%, -6%, 0) scale(1.16); } to { opacity: 0; transform: translate3d(28%, -18%, 0) scale(1.4); } }
 
 @media (max-height: 540px) and (orientation: landscape) {
   .identity { padding-top: 10vh; padding-bottom: 4vh; }
