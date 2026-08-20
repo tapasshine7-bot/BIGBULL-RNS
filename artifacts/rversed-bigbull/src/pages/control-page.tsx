@@ -67,6 +67,13 @@ import {
   adminDeleteGatewayAnnouncement,
   adminPostGuides,
   adminPostToolOrder,
+  adminBlockVip,
+  adminUnblockVip,
+  adminListUidSeed,
+  adminAddUidSeed,
+  adminDeleteUidSeed,
+  adminGetMusic,
+  adminPostMusic,
   fetchBannerState,
   readAdminToken,
   setAdminToken,
@@ -132,9 +139,17 @@ export function ControlPage() {
   // VIP membership + payments
   const [vipMembers, setVipMembers] = useState<Array<Record<string, unknown>>>([]);
   const [vipPayments, setVipPayments] = useState<Array<Record<string, unknown>>>([]);
+  const [vipBlocks, setVipBlocks] = useState<Array<Record<string, unknown>>>([]);
   const [vipConfig, setVipConfig] = useState<{ upiId: string; upiName: string; amount: number; qrDataUrl: string }>({ upiId: '', upiName: 'RNS BIGBULL', amount: 20, qrDataUrl: '' });
   const [generateName, setGenerateName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [uidSeeds, setUidSeeds] = useState<Array<Record<string, unknown>>>([]);
+  const [newSeedUid, setNewSeedUid] = useState('');
+  const [newSeedName, setNewSeedName] = useState('');
+  const [newSeedRegion, setNewSeedRegion] = useState('IND');
+  const [musicUrl, setMusicUrl] = useState('');
+  const [currentMusicUrl, setCurrentMusicUrl] = useState<string | null>(null);
   const [upiId, setUpiId] = useState('');
   const [upiName, setUpiName] = useState('');
   const [upiAmount, setUpiAmount] = useState('20');
@@ -152,7 +167,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, mu] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),
@@ -169,6 +184,8 @@ export function ControlPage() {
       adminVipConfigGet(),
       adminVipAnalytics(),
       adminListGatewayAnnouncements(),
+      adminListUidSeed(),
+      adminGetMusic(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
     if (mo.status === 'fulfilled' && Array.isArray(mo.value)) setMonitors(mo.value);
@@ -190,6 +207,19 @@ export function ControlPage() {
     }
     if (vc.status === 'fulfilled' && vc.value && typeof vc.value === 'object' && 'upiId' in vc.value) setVipConfig(vc.value as never);
     if (va.status === 'fulfilled' && va.value && typeof va.value === 'object' && 'totalMembers' in va.value) setVipAnalytics(va.value as never);
+    if (vp.status === 'fulfilled' && vp.value && typeof vp.value === 'object' && 'blocks' in vp.value) {
+      const blocks = (vp.value as { blocks?: unknown }).blocks;
+      if (Array.isArray(blocks)) setVipBlocks(blocks);
+    }
+    if (us.status === 'fulfilled' && us.value && typeof us.value === 'object' && 'seeds' in us.value) {
+      const seeds = (us.value as { seeds?: unknown }).seeds;
+      if (Array.isArray(seeds)) setUidSeeds(seeds);
+    }
+    if (mu.status === 'fulfilled' && mu.value && typeof mu.value === 'object' && 'url' in mu.value) {
+      const url = (mu.value as { url?: string | null }).url;
+      setCurrentMusicUrl(url ?? null);
+      setMusicUrl(url ?? '');
+    }
     if (ga.status === 'fulfilled' && ga.value && typeof ga.value === 'object') {
       const payload = ga.value as { announcements?: unknown };
       if (Array.isArray(payload.announcements)) setGatewayAnnouncements(payload.announcements as never);
@@ -397,6 +427,83 @@ export function ControlPage() {
         flash(approve ? 'Payment approved — lifetime VIP access granted.' : 'Payment rejected.');
         await refreshAll();
       }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function blockMember(memberKey: string, displayName: string) {
+    const reason = window.prompt(`Block ${displayName || memberKey}? The user will be kicked out of VIP Hub until they pay again.\n\nReason (optional):`, 'Payment not received');
+    if (reason === null) return; // cancelled
+    setBusyAction(`block-${memberKey}`);
+    try {
+      const result = await adminBlockVip(memberKey, reason.trim() || 'Blocked by admin');
+      if (result && (result as { ok?: boolean }).ok) flash('Member blocked — they lose VIP access until they pay again.');
+      else flash((result as { error?: string } | null)?.error ?? 'Block failed.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function unblockMember(memberKey: string) {
+    setBusyAction(`unblock-${memberKey}`);
+    try {
+      const result = await adminUnblockVip(memberKey);
+      if (result && (result as { ok?: boolean }).ok) flash('Member unblocked — VIP access restored.');
+      else flash((result as { error?: string } | null)?.error ?? 'Unblock failed.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function addUidSeed() {
+    const uid = newSeedUid.trim();
+    const name = newSeedName.trim();
+    if (!/\d{7,12}/.test(uid) || !name) {
+      flash('Enter a valid UID (7–12 digits) and the player name.');
+      return;
+    }
+    setBusyAction('uid-seed-add');
+    try {
+      const result = await adminAddUidSeed(uid, name, newSeedRegion.trim().toUpperCase().slice(0, 10) || 'IND');
+      if (result && (result as { ok?: boolean }).ok) {
+        flash(`UID ${uid} is now guaranteed to resolve.`);
+        setNewSeedUid('');
+        setNewSeedName('');
+        await refreshAll();
+      } else flash((result as { error?: string } | null)?.error ?? 'Add failed.');
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function deleteUidSeed(uid: string) {
+    setBusyAction(`uid-seed-del-${uid}`);
+    try {
+      const result = await adminDeleteUidSeed(uid);
+      if (result && (result as { ok?: boolean }).ok) flash('Seeded UID removed.');
+      await refreshAll();
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function saveMusicUrl() {
+    const url = musicUrl.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      flash('The music link must start with http:// or https://');
+      return;
+    }
+    setBusyAction('music');
+    try {
+      const result = await adminPostMusic(url);
+      if (result && (result as { ok?: boolean }).ok) {
+        setCurrentMusicUrl(url || null);
+        flash(url ? 'Gateway music set — it auto-plays when users open the gateway.' : 'Gateway music cleared.');
+        await refreshAll();
+      } else flash((result as { error?: string } | null)?.error ?? 'Save failed.');
     } finally {
       setBusyAction(null);
     }
@@ -644,7 +751,20 @@ export function ControlPage() {
               }}
               vipMembers={vipMembers}
               vipPayments={vipPayments}
+              vipBlocks={vipBlocks}
               vipConfig={vipConfig}
+              memberSearch={memberSearch}
+              setMemberSearch={setMemberSearch}
+              uidSeeds={uidSeeds}
+              newSeedUid={newSeedUid}
+              setNewSeedUid={setNewSeedUid}
+              newSeedName={newSeedName}
+              setNewSeedName={setNewSeedName}
+              newSeedRegion={newSeedRegion}
+              setNewSeedRegion={setNewSeedRegion}
+              musicUrl={musicUrl}
+              setMusicUrl={setMusicUrl}
+              currentMusicUrl={currentMusicUrl}
               onRefreshVip={() => void refreshAll()}
               generateName={generateName}
               setGenerateName={setGenerateName}
@@ -660,9 +780,17 @@ export function ControlPage() {
               onGenerateKey={generateKeyForUser}
               onApproveVip={approveVipPayment}
               onSaveVipConfig={saveVipConfig}
+              onBlockMember={blockMember}
+              onUnblockMember={unblockMember}
+              onAddUidSeed={addUidSeed}
+              onDeleteUidSeed={deleteUidSeed}
+              onSaveMusic={saveMusicUrl}
               busyGenerate={busyAction === 'vip-generate'}
               busyApprove={busyAction?.startsWith('vip-') === true}
               busyConfig={busyAction === 'vip-config'}
+              busyBlock={busyAction?.startsWith('block-') === true}
+              busySeed={busyAction === 'uid-seed-add' || busyAction?.startsWith('uid-seed-del-') === true}
+              busyMusic={busyAction === 'music'}
               busyAnnouncement={Boolean(busyAction === 'announcement' || busyAction?.startsWith('announcement-'))}
               busyLock={Boolean(busyAction === 'lock')}
               busyRequest={Boolean(busyAction?.startsWith('request-'))}
@@ -1211,7 +1339,20 @@ function SiteOpsTab({
   onEmergencyLock,
   vipMembers,
   vipPayments,
+  vipBlocks,
   vipConfig,
+  memberSearch,
+  setMemberSearch,
+  uidSeeds,
+  newSeedUid,
+  setNewSeedUid,
+  newSeedName,
+  setNewSeedName,
+  newSeedRegion,
+  setNewSeedRegion,
+  musicUrl,
+  setMusicUrl,
+  currentMusicUrl,
   generateName,
   setGenerateName,
   generatedKey,
@@ -1226,10 +1367,18 @@ function SiteOpsTab({
   onGenerateKey,
   onApproveVip,
   onSaveVipConfig,
+  onBlockMember,
+  onUnblockMember,
+  onAddUidSeed,
+  onDeleteUidSeed,
+  onSaveMusic,
   onRefreshVip,
   busyGenerate,
   busyApprove,
   busyConfig,
+  busyBlock,
+  busySeed,
+  busyMusic,
   busyAnnouncement,
   busyLock,
   busyRequest,
@@ -1274,9 +1423,34 @@ function SiteOpsTab({
   busyGenerate: boolean;
   busyApprove: boolean;
   busyConfig: boolean;
+  busyBlock: boolean;
+  busySeed: boolean;
+  busyMusic: boolean;
   onRefreshVip: () => void;
+  vipBlocks: Array<Record<string, unknown>>;
+  memberSearch: string;
+  setMemberSearch: (value: string) => void;
+  uidSeeds: Array<Record<string, unknown>>;
+  newSeedUid: string;
+  setNewSeedUid: (value: string) => void;
+  newSeedName: string;
+  setNewSeedName: (value: string) => void;
+  newSeedRegion: string;
+  setNewSeedRegion: (value: string) => void;
+  musicUrl: string;
+  setMusicUrl: (value: string) => void;
+  currentMusicUrl: string | null;
+  onBlockMember: (memberKey: string, displayName: string) => void;
+  onUnblockMember: (memberKey: string) => void;
+  onAddUidSeed: () => void;
+  onDeleteUidSeed: (uid: string) => void;
+  onSaveMusic: () => void;
 }) {
   const pendingPayments = vipPayments.filter((p) => (p as { status: string }).status === 'pending');
+  const blockedKeys = new Set(vipBlocks.map((b) => String((b as { member_key?: string }).member_key ?? '')));
+  const filteredMembers = memberSearch.trim()
+    ? vipMembers.filter((m) => String((m as { display_name?: string }).display_name ?? '').toLowerCase().includes(memberSearch.trim().toLowerCase()))
+    : vipMembers;
 
   // Continuous auto-scan: keeps members, payments, stats and visitors fresh while
   // the tab is open — safe under many simultaneous payments (read-only polling).
@@ -1504,22 +1678,32 @@ function SiteOpsTab({
         <div className="grid gap-3 lg:grid-cols-2">
           {/* All members — key lookup */}
           <div>
-            <div className="mb-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">All members ({vipMembers.length}) — copy any key</div>
-            <div className="max-h-52 space-y-1.5 overflow-y-auto">
-              {vipMembers.length === 0 ? (
-                <div className="border border-border bg-background/40 p-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No members yet.</div>
+            <div className="mb-1.5 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">All members ({vipMembers.length}) — copy any key, search by name</div>
+            <input
+              value={memberSearch}
+              onChange={(event) => setMemberSearch(event.target.value)}
+              maxLength={60}
+              placeholder="Search member by name…"
+              className="mb-1.5 w-full border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
+              data-testid="input-member-search"
+            />
+            <div className="max-h-48 space-y-1.5 overflow-y-auto">
+              {filteredMembers.length === 0 ? (
+                <div className="border border-border bg-background/40 p-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No members{memberSearch.trim() ? ' match that name' : ' yet'}.</div>
               ) : (
-                vipMembers.map((m) => {
+                filteredMembers.map((m) => {
                   const key = String((m as { member_key?: string }).member_key ?? '');
                   const name = String((m as { display_name?: string }).display_name ?? '—');
                   const status = String((m as { status?: string }).status ?? '');
                   const created = (m as { created_at?: string }).created_at ?? '';
+                  const isBlocked = blockedKeys.has(key);
                   return (
                     <div key={key} className="flex items-center gap-2 border border-border bg-background/40 px-2 py-1.5" data-testid={`vip-member-${key}`}>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <code className="truncate text-[10px] font-bold tracking-wider text-accent">{key}</code>
-                          <span className={`shrink-0 border px-1 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] ${status === 'vip' ? 'border-accent/40 text-accent' : 'border-border text-muted-foreground'}`}>{status}</span>
+                          <span className={`shrink-0 border px-1 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] ${status === 'vip' && !isBlocked ? 'border-accent/40 text-accent' : 'border-border text-muted-foreground'}`}>{status}</span>
+                          {isBlocked ? <span className="shrink-0 border border-red-400/50 px-1 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] text-red-300">blocked</span> : null}
                         </div>
                         <div className="truncate text-[10px] text-foreground/80">{name} · {formatTime(created)}</div>
                       </div>
@@ -1600,6 +1784,14 @@ function SiteOpsTab({
                     <span className="text-[10px] text-foreground/80">{name}</span>
                     <span className="text-[10px] text-muted-foreground">₹{(p as { amount?: number }).amount ?? 20}</span>
                     <span className={`shrink-0 border px-1.5 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] ${status === 'approved' ? 'border-accent/40 text-accent' : status === 'rejected' ? 'border-red-400/50 text-red-300' : 'border-border text-muted-foreground'}`}>{status}</span>
+                    <button
+                      onClick={() => onBlockMember(key, name)}
+                      disabled={busyBlock}
+                      className={`border px-1.5 py-0.5 text-mono text-[6px] uppercase tracking-[.16em] transition disabled:opacity-50 ${blockedKeys.has(key) ? 'border-red-400/40 bg-red-500/10 text-red-300' : 'border-border text-muted-foreground hover:text-red-200'}`}
+                      data-testid={`button-vip-block-${key}`}
+                    >
+                      {busyBlock ? '…' : blockedKeys.has(key) ? 'Blocked' : 'Block'}
+                    </button>
                     <span className="ml-auto text-mono text-[7px] uppercase tracking-[.14em] text-muted-foreground">{formatTime(created)}</span>
                   </div>
                 );
@@ -1640,6 +1832,128 @@ function SiteOpsTab({
           {vipConfig.upiId ? (
             <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Current live config: {vipConfig.upiId} · ₹{vipConfig.amount}{vipConfig.upiName ? ` · ${vipConfig.upiName}` : ''}</div>
           ) : null}
+        </div>
+
+        {/* Blocked members — users kicked out of VIP Hub until they pay again */}
+        <div className="mt-3 border border-red-400/30 bg-red-500/5 p-2.5">
+          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-red-300">Blocked members ({vipBlocks.length}) — removed from VIP Hub, they must pay again to return</div>
+          <div className="space-y-1.5">
+            {vipBlocks.length === 0 ? (
+              <div className="text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">Nobody blocked — all clear.</div>
+            ) : (
+              vipBlocks.map((b) => {
+                const key = String((b as { member_key?: string }).member_key ?? '');
+                const reason = String((b as { reason?: string } | null)?.reason ?? '—');
+                const blockedAt = (b as { blocked_at?: string }).blocked_at ?? '';
+                return (
+                  <div key={key} className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-red-400/30 bg-background/40 px-2.5 py-1.5" data-testid={`vip-blocked-${key}`}>
+                    <code className="text-[10px] font-bold tracking-wider text-red-300">{key}</code>
+                    <span className="text-[10px] text-foreground/80">{reason}</span>
+                    <span className="ml-auto text-mono text-[7px] uppercase tracking-[.14em] text-muted-foreground">{formatTime(blockedAt)}</span>
+                    <button
+                      onClick={() => onUnblockMember(key)}
+                      disabled={busyBlock}
+                      className="border border-accent/50 bg-accent/10 px-2 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+                      data-testid={`button-vip-unblock-${key}`}
+                    >
+                      {busyBlock ? '…' : 'Unblock'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* UID seed manager */}
+        <div className="mt-3 border border-border bg-background/40 p-2.5">
+          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-muted-foreground">UID seed manager — force a Free Fire UID to always resolve (like your own)</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_80px_auto]">
+            <input
+              value={newSeedUid}
+              onChange={(event) => setNewSeedUid(event.target.value.replace(/[^\d]/g, '').slice(0, 12))}
+              placeholder="UID (7–12 digits)"
+              className="border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
+              data-testid="input-seed-uid"
+            />
+            <input
+              value={newSeedName}
+              onChange={(event) => setNewSeedName(event.target.value)}
+              maxLength={60}
+              placeholder="Player name"
+              className="border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
+              data-testid="input-seed-name"
+            />
+            <input
+              value={newSeedRegion}
+              onChange={(event) => setNewSeedRegion(event.target.value.toUpperCase().slice(0, 10))}
+              maxLength={10}
+              placeholder="Region"
+              className="border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
+              data-testid="input-seed-region"
+            />
+            <button
+              onClick={onAddUidSeed}
+              disabled={busySeed || !newSeedUid.trim() || !newSeedName.trim()}
+              className="flex items-center gap-1.5 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              data-testid="button-seed-add"
+            >
+              {busySeed ? <LoaderCircle size={10} className="spin-slow" /> : <Copy size={11} />} {busySeed ? 'Saving…' : 'Seed'}
+            </button>
+          </div>
+          <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+            {uidSeeds.length === 0 ? (
+              <div className="text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">No seeded UIDs yet.</div>
+            ) : (
+              uidSeeds.map((s) => {
+                const uid = String((s as { uid?: string }).uid ?? '');
+                const name = String((s as { name?: string }).name ?? '—');
+                const region = String((s as { region?: string }).region ?? '—');
+                return (
+                  <div key={uid} className="flex items-center gap-2 border border-border bg-background/60 px-2 py-1" data-testid={`seed-row-${uid}`}>
+                    <code className="text-[10px] font-bold tracking-wider text-accent">{uid}</code>
+                    <span className="text-[10px] text-foreground/80">{name} · {region}</span>
+                    <button
+                      onClick={() => onDeleteUidSeed(uid)}
+                      disabled={busySeed}
+                      className="ml-auto shrink-0 border border-border px-1.5 py-1 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground transition hover:text-red-200 disabled:opacity-50"
+                      data-testid={`button-seed-delete-${uid}`}
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Gateway music */}
+        <div className="mt-3 border border-accent/30 bg-accent/5 p-2.5">
+          <div className="mb-1.5 text-mono text-[7px] uppercase tracking-[.2em] text-accent">Gateway music — auto-plays when users open the site (MP3/any audio link)</div>
+          <div className="flex gap-2">
+            <input
+              value={musicUrl}
+              onChange={(event) => setMusicUrl(event.target.value)}
+              maxLength={500}
+              placeholder="https://example.com/song.mp3 — leave empty to clear"
+              className="min-w-0 flex-1 border border-border bg-background/60 px-2 py-1.5 text-xs outline-none focus:border-accent/60"
+              data-testid="input-music-url"
+            />
+            <button
+              onClick={onSaveMusic}
+              disabled={busyMusic}
+              className="shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              data-testid="button-music-save"
+            >
+              {busyMusic ? <LoaderCircle size={10} className="spin-slow" /> : null} {busyMusic ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {currentMusicUrl ? (
+            <div className="mt-2 truncate text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">Live now: {currentMusicUrl}</div>
+          ) : (
+            <div className="mt-2 text-mono text-[7px] uppercase tracking-[.16em] text-muted-foreground">No music set — gateway stays silent.</div>
+          )}
         </div>
       </div>
 

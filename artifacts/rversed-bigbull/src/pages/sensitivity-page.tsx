@@ -6,6 +6,71 @@ import { useEffect } from 'react';
 
 const RAM_OPTIONS = ['2', '3', '4', '6', '8'];
 const DPI_OPTIONS = ['standard', 'high'];
+
+// Popular devices among Indian Free Fire players — brand → list of (model, RAM).
+interface DeviceModel { model: string; ram: string }
+const DEVICE_LIST: Record<string, DeviceModel[]> = {
+  Samsung: [
+    { model: 'Galaxy A14 5G', ram: '4' },
+    { model: 'Galaxy A25 5G', ram: '6' },
+    { model: 'Galaxy A34 5G', ram: '6' },
+    { model: 'Galaxy A54 5G', ram: '8' },
+    { model: 'Galaxy A55 5G', ram: '8' },
+    { model: 'Galaxy S23', ram: '8' },
+    { model: 'Galaxy M14 5G', ram: '4' },
+  ],
+  Vivo: [
+    { model: 'Vivo T3x 5G', ram: '4' },
+    { model: 'Vivo T3 Pro 5G', ram: '8' },
+    { model: 'Vivo V29 5G', ram: '8' },
+    { model: 'Vivo Y55', ram: '4' },
+    { model: 'Vivo Y78 5G', ram: '6' },
+  ],
+  'Redmi / Xiaomi': [
+    { model: 'Redmi Note 13 5G', ram: '6' },
+    { model: 'Redmi Note 13 Pro 5G', ram: '8' },
+    { model: 'Redmi Note 12', ram: '4' },
+    { model: 'Redmi 13 5G', ram: '6' },
+    { model: 'Xiaomi 12 5G', ram: '8' },
+  ],
+  Realme: [
+    { model: 'Realme Narzo 60x', ram: '4' },
+    { model: 'Realme Narzo 70 Pro', ram: '8' },
+    { model: 'Realme GT Neo 5', ram: '8' },
+    { model: 'Realme C65', ram: '4' },
+  ],
+  POCO: [
+    { model: 'POCO X5 5G', ram: '6' },
+    { model: 'POCO X5 Pro', ram: '8' },
+    { model: 'POCO M5', ram: '4' },
+    { model: 'POCO M6 Pro', ram: '8' },
+  ],
+  iQOO: [
+    { model: 'iQOO Z7 5G', ram: '6' },
+    { model: 'iQOO Z9 5G', ram: '8' },
+  ],
+  OPPO: [
+    { model: 'OPPO A78 5G', ram: '4' },
+    { model: 'OPPO A3x', ram: '4' },
+    { model: 'OPPO Reno 11', ram: '8' },
+  ],
+  OnePlus: [
+    { model: 'OnePlus Nord CE 3', ram: '8' },
+    { model: 'OnePlus Nord 4', ram: '8' },
+  ],
+  Motorola: [
+    { model: 'Moto G84 5G', ram: '8' },
+    { model: 'Moto G54', ram: '8' },
+  ],
+  iPhone: [
+    { model: 'iPhone 11', ram: '4' },
+    { model: 'iPhone 12', ram: '4' },
+    { model: 'iPhone 13', ram: '4' },
+    { model: 'iPhone 14', ram: '6' },
+    { model: 'iPhone 15', ram: '6' },
+  ],
+};
+const BRANDS = Object.keys(DEVICE_LIST);
 const SCOPE_LABELS: Record<string, string> = {
   general: 'General',
   redDot: 'Red Dot',
@@ -27,6 +92,7 @@ export function SensitivityPage() {
   const [ram, setRam] = useState('4');
   const [gyro, setGyro] = useState('off');
   const [dpi, setDpi] = useState('standard');
+  const [brand, setBrand] = useState('');
   const [values, setValues] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -61,6 +127,7 @@ export function SensitivityPage() {
       cancelled = true;
     };
   }, [ram, gyro, dpi]);
+
 
   const matchedPreset = useMemo(() => {
     const hit = presets.find(
@@ -101,6 +168,19 @@ export function SensitivityPage() {
       <section className="border border-border bg-card/60 p-5" aria-label="Device options">
         <div className="text-mono mb-3 text-[9px] uppercase tracking-[.22em] text-muted-foreground">Your device</div>
         <div className="space-y-4">
+          <div>
+            <div className="mb-2 text-xs text-muted-foreground">Your phone (optional — RAM auto-fills)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {BRANDS.map((b) => <Chip key={b} label={b} selected={brand === b} onClick={() => setBrand(brand === b ? '' : b)} dataTestId={`chip-brand-${b.replace(/\/ /g, '')}`} />)}
+            </div>
+            {brand && DEVICE_LIST[brand] && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {DEVICE_LIST[brand].map((d) => (
+                  <Chip key={`${brand}-${d.model}`} label={`${d.model} (${d.ram}GB)`} selected={ram === d.ram && brand === brand} onClick={() => { setRam(d.ram); }} dataTestId={`chip-model-${d.model.replace(/ /g, '')}`} />
+                ))}
+              </div>
+            )}
+          </div>
           <div>
             <div className="mb-2 text-xs text-muted-foreground">RAM (GB)</div>
             <div className="flex flex-wrap gap-1.5">
@@ -144,10 +224,10 @@ export function SensitivityPage() {
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-display text-4xl font-bold text-foreground">{value}</span>
-                  <span className="text-mono text-[9px] uppercase text-muted-foreground">/ 100</span>
+                  <span className="text-mono text-[9px] uppercase text-muted-foreground">/ 200</span>
                 </div>
                 <div className="mt-3 h-1.5 w-full bg-secondary">
-                  <div className="h-full bg-gradient-to-r from-primary to-accent" style={{ width: `${Math.min(100, value)}%` }} aria-hidden="true" />
+                  <div className="h-full bg-gradient-to-r from-primary to-accent" style={{ width: `${Math.min(100, Math.round((Number(value) ?? 0) / 2))}%` }} aria-hidden="true" />
                 </div>
               </div>
             ))}

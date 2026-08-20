@@ -101,7 +101,12 @@ export function UidPage() {
                 {result.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="text-mono text-[8px] uppercase tracking-[.2em] text-primary">Found / player profile</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-mono text-[8px] uppercase tracking-[.2em] text-primary">Found / player profile</div>
+                  {result.source === 'verified' ? (
+                    <span className="border border-emerald-400/50 bg-emerald-400/10 px-2 py-0.5 text-mono text-[8px] uppercase tracking-[.16em] text-emerald-400">✓ Verified profile</span>
+                  ) : null}
+                </div>
                 <h2 className="text-display text-3xl uppercase tracking-wider">{result.name}</h2>
               </div>
             </div>
@@ -121,7 +126,7 @@ export function UidPage() {
             </div>
           </div>
           <div className="mt-4 text-mono text-[8px] uppercase tracking-[.18em] text-muted-foreground">
-            Source: {result.source === 'live' ? 'live public API' : 'our cached record'} — levels update as the player keeps playing
+            Source: {result.source === 'live' ? 'live public API' : result.source === 'verified' ? 'verified admin profile — always available' : 'our cached record'} — levels update as the player keeps playing
           </div>
         </section>
       ) : hasSearched && !loading ? (

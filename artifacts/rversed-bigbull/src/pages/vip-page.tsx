@@ -54,6 +54,19 @@ function VipGate({ children }: { children: React.ReactNode }) {
     void vipPayConfig().then((cfg) => setConfig(cfg));
     void vipStatus(storedKey).then((result) => {
       if (!result.ok) return;
+      // Blocked by admin → access revoked; clear local keys and force re-pay.
+      if (result.status === 'blocked') {
+        try {
+          window.localStorage.removeItem('rns_vip_key');
+          window.localStorage.removeItem('rbs_vip_status');
+        } catch {
+          /* ignore */
+        }
+        setLiveStatus('blocked');
+        setPayMessage((result as { reason?: string }).reason ? `Blocked: ${result.reason}.` : 'Your VIP access was revoked.');
+        navigate('/member');
+        return;
+      }
       setLiveStatus(result.status);
       try {
         window.localStorage.setItem('rbs_vip_status', result.status);

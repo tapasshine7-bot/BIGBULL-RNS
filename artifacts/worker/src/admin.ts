@@ -126,6 +126,22 @@ const ADMIN_SCHEMA = [
      status TEXT NOT NULL DEFAULT 'pending',
      created_at TEXT NOT NULL
    )`,
+  // VIP members blocked by the admin (wrongly approved without payment etc.).
+  // Blocked members are kicked to the main dashboard and must pay again.
+  `CREATE TABLE IF NOT EXISTS vip_blocks (
+     member_key TEXT PRIMARY KEY,
+     reason TEXT,
+     blocked_at TEXT NOT NULL,
+     created_at TEXT NOT NULL
+   )`,
+  // Manually seeded Free Fire UID profiles (live lookup is intermittently
+  // blocked upstream, so admin can guarantee a profile always resolves).
+  `CREATE TABLE IF NOT EXISTS uid_seed (
+     uid TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     region TEXT NOT NULL DEFAULT 'IND',
+     created_at TEXT NOT NULL
+   )`,
 ];
 
 async function ensureSchema(db: D1Database): Promise<void> {
@@ -999,7 +1015,8 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       recordVisit(db, "/api/admin/vip", deviceFingerprint(request));
       const members = await db.prepare("SELECT * FROM vip_members ORDER BY created_at DESC LIMIT 200").all();
       const payments = await db.prepare("SELECT * FROM vip_payments ORDER BY id DESC LIMIT 200").all();
-      return safeJson(200, { members: members.results ?? [], payments: payments.results ?? [] }, request);
+      const blocks = await db.prepare("SELECT * FROM vip_blocks ORDER BY created_at DESC LIMIT 200").all();
+      return safeJson(200, { members: members.results ?? [], payments: payments.results ?? [], blocks: blocks.results ?? [] }, request);
     }
 
     // POST /api/admin/vip/approve — approve a payment, lifetime access for the member key
@@ -1076,6 +1093,98 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       return safeJson(200, { ok: true, memberKey }, request);
     }
 
+    // POST /api/admin/vip/block — block a member: VIP access revoked until re-pay
+    if (path === "/vip/block" && request.method === "POST") {
+      recordVisit(db, "/api/admin/vip/block", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { memberKey?: unknown; reason?: unknown };
+      const memberKey = typeof parsed.memberKey === "string" ? parsed.memberKey.trim() : "";
+      if (!memberKey) return safeJson(400, { ok: false, error: "Member key is required" }, request);
+      const reason = typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 200) : "Blocked by admin";
+      const exists = await db.prepare("SELECT member_key FROM vip_members WHERE member_key = ?").bind(memberKey).first<{ member_key: string }>();
+      if (!exists) return safeJson(404, { ok: false, error: "Member not found" }, request);
+      const now = new Date().toISOString();
+      await db
+        .prepare("INSERT OR REPLACE INTO vip_blocks (member_key, reason, blocked_at, created_at) VALUES (?, ?, ?, ?)")
+        .bind(memberKey, reason, now, now)
+        .run();
+      await db
+        .prepare("UPDATE vip_members SET status = 'registered' WHERE member_key = ?")
+        .bind(memberKey)
+        .run();
+      await audit(db, "Tapas123", "vip.block", memberKey, { reason }).catch(() => {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // POST /api/admin/vip/unblock — lift the block, member can access again
+    if (path === "/vip/unblock" && request.method === "POST") {
+      recordVisit(db, "/api/admin/vip/unblock", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { memberKey?: unknown };
+      const memberKey = typeof parsed.memberKey === "string" ? parsed.memberKey.trim() : "";
+      if (!memberKey) return safeJson(400, { ok: false, error: "Member key is required" }, request);
+      await db.prepare("DELETE FROM vip_blocks WHERE member_key = ?").bind(memberKey).run();
+      await audit(db, "Tapas123", "vip.unblock", memberKey, {}).catch(() => {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/uid-seed — list manually seeded UID profiles
+    if (path === "/uid-seed" && request.method === "GET") {
+      recordVisit(db, "/api/admin/uid-seed", deviceFingerprint(request));
+      const seeds = await db.prepare("SELECT * FROM uid_seed ORDER BY created_at DESC LIMIT 200").all();
+      return safeJson(200, { seeds: seeds.results ?? [] }, request);
+    }
+
+    // POST /api/admin/uid-seed — add or update a seeded UID profile
+    if (path === "/uid-seed" && request.method === "POST") {
+      recordVisit(db, "/api/admin/uid-seed", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { uid?: unknown; name?: unknown; region?: unknown };
+      const uid = typeof parsed.uid === "string" ? parsed.uid.trim().slice(0, 16) : "";
+      const name = typeof parsed.name === "string" ? parsed.name.trim().slice(0, 60) : "";
+      const region = typeof parsed.region === "string" ? parsed.region.trim().slice(0, 10).toUpperCase() : "IND";
+      if (!uid || !name) return safeJson(400, { ok: false, error: "UID and name are required" }, request);
+      await db
+        .prepare("INSERT OR REPLACE INTO uid_seed (uid, name, region, created_at) VALUES (?, ?, ?, ?)")
+        .bind(uid, name, region, new Date().toISOString())
+        .run();
+      await audit(db, "Tapas123", "uid.seed", uid, { name, region }).catch(() => {});
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // POST /api/admin/uid-seed/delete — remove a seeded UID
+    if (path === "/uid-seed/delete" && request.method === "POST") {
+      recordVisit(db, "/api/admin/uid-seed/delete", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { uid?: unknown };
+      const uid = typeof parsed.uid === "string" ? parsed.uid.trim() : "";
+      if (!uid) return safeJson(400, { ok: false, error: "UID is required" }, request);
+      await db.prepare("DELETE FROM uid_seed WHERE uid = ?").bind(uid).run();
+      await db.prepare("DELETE FROM ff_uid_cache WHERE uid = ?").bind(uid).run();
+      return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/music — current gateway music URL
+    if (path === "/music" && request.method === "GET") {
+      recordVisit(db, "/api/admin/music", deviceFingerprint(request));
+      const row = await db.prepare("SELECT value FROM site_config WHERE key = 'gateway_music_url'").first<{ value: string }>();
+      return safeJson(200, { url: row?.value ?? null }, request);
+    }
+    // POST /api/admin/music — set the gateway auto-play music URL (mp3/m3u8 or any audio url; empty string clears)
+    if (path === "/music" && request.method === "POST") {
+      recordVisit(db, "/api/admin/music", deviceFingerprint(request));
+      const parsed = (await request.json().catch(() => ({}))) as { url?: unknown };
+      const url = typeof parsed.url === "string" ? parsed.url.trim().slice(0, 500) : "";
+      if (!/^https?:\/\//i.test(url) && url !== "") {
+        return safeJson(400, { ok: false, error: "URL must start with http:// or https://" }, request);
+      }
+      if (url === "") {
+        await db.prepare("DELETE FROM site_config WHERE key = 'gateway_music_url'").run();
+      } else {
+        await db
+          .prepare("INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('gateway_music_url', ?, ?)")
+          .bind(url, new Date().toISOString())
+          .run();
+      }
+      await audit(db, "Tapas123", "gateway.music.update", "site_config", { url: url || "(cleared)" }).catch(() => {});
+      return safeJson(200, { ok: true, url: url || null }, request);
+    }
     return safeJson(404, { ok: false, error: "Route not found" }, request);
   } catch (error) {
     const message = (error as { message?: string }).message ?? "Internal error";

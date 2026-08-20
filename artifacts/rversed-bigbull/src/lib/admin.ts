@@ -351,7 +351,7 @@ export async function getVisitorStats() {
 // VIP membership + ₹20 payment (no login — lifetime unique key)
 // ---------------------------------------------------------------------------
 
-export type VipStatus = 'registered' | 'vip';
+export type VipStatus = 'registered' | 'vip' | 'blocked';
 
 export async function vipRegister(name: string, email: string, existingKey?: string) {
   try {
@@ -370,8 +370,8 @@ export async function vipRegister(name: string, email: string, existingKey?: str
 export async function vipStatus(key: string) {
   try {
     const response = await fetch(`${getApiBaseUrl()}/api/vip-status?key=${encodeURIComponent(key)}`, { cache: 'no-store' });
-    const data = (await response.json()) as { ok?: boolean; status?: string; error?: string };
-    return { ok: Boolean(data.ok), status: (data.status ?? '') as VipStatus, error: data.error ?? '' };
+    const data = (await response.json()) as { ok?: boolean; status?: string; reason?: string; error?: string };
+    return { ok: Boolean(data.ok), status: (data.status ?? '') as VipStatus, reason: data.reason ?? '', error: data.error ?? '' };
   } catch {
     return { ok: false, status: '' as VipStatus, error: 'Network error' };
   }
@@ -427,7 +427,7 @@ export type AdminVipPayment = {
 };
 
 export async function adminGetVip() {
-  return adminFetch<{ members: AdminVipMember[]; payments: AdminVipPayment[] }>('/vip');
+  return adminFetch<{ members: AdminVipMember[]; payments: AdminVipPayment[]; blocks?: AdminVipBlock[] }>('/vip');
 }
 
 export async function adminApproveVip(paymentId: number, memberKey: string, approve: boolean) {
@@ -518,4 +518,71 @@ export async function adminPostToolOrder(toolId: string, position: number) {
     method: 'POST',
     body: JSON.stringify({ order: [{ tool_id: toolId, position }] }),
   });
+}
+
+// VIP member blocking (revokes access until the user pays again)
+export type AdminVipBlock = {
+  member_key: string;
+  reason: string | null;
+  blocked_at: string;
+  created_at: string;
+};
+
+export async function adminBlockVip(memberKey: string, reason = 'Payment not received') {
+  return adminFetch<{ ok: boolean }>('/vip/block', {
+    method: 'POST',
+    body: JSON.stringify({ memberKey, reason }),
+  });
+}
+
+export async function adminUnblockVip(memberKey: string) {
+  return adminFetch<{ ok: boolean }>('/vip/unblock', {
+    method: 'POST',
+    body: JSON.stringify({ memberKey }),
+  });
+}
+
+// UID seed manager (admin manually guarantees a UID always resolves)
+export type AdminUidSeed = { uid: string; name: string; region: string; created_at: string };
+
+export async function adminListUidSeed() {
+  return adminFetch<{ seeds: AdminUidSeed[] }>('/uid-seed');
+}
+
+export async function adminAddUidSeed(uid: string, name: string, region = 'IND') {
+  return adminFetch<{ ok: boolean }>('/uid-seed', {
+    method: 'POST',
+    body: JSON.stringify({ uid, name, region }),
+  });
+}
+
+export async function adminDeleteUidSeed(uid: string) {
+  return adminFetch<{ ok: boolean }>('/uid-seed/delete', {
+    method: 'POST',
+    body: JSON.stringify({ uid }),
+  });
+}
+
+// Gateway auto-play music (admin sets the audio URL; site plays it on entry)
+export async function adminGetMusic() {
+  return adminFetch<{ url: string | null }>('/music');
+}
+
+export async function adminPostMusic(url: string) {
+  return adminFetch<{ ok: boolean; url: string | null }>('/music', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
+// Public music URL (no admin token needed — used by the gateway page)
+export async function getGatewayMusic(): Promise<string | null> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/api/music`, { cache: 'no-store' });
+    if (!response.ok) return null;
+    const data = (await response.json()) as { url?: string | null };
+    return typeof data.url === 'string' && data.url ? data.url : null;
+  } catch {
+    return null;
+  }
 }

@@ -216,11 +216,22 @@ async function handleGateway(db: D1Database, request: Request): Promise<Response
 
 async function handleVipHub(db: D1Database, request: Request): Promise<Response> {
   await recordPublicVisit(db, "/vip", request);
+  // VIP block enforcement: a blocked key loses access until it pays again.
+  const hubKey = ((request.headers.get("x-member-key") ?? "") as string).trim().toUpperCase();
+  let accessBlocked = false;
+  let blockReason = "";
+  if (hubKey) {
+    const block = await db.prepare("SELECT reason FROM vip_blocks WHERE member_key = ?").bind(hubKey).first<{ reason: string | null }>();
+    if (block) {
+      accessBlocked = true;
+      blockReason = block.reason ?? "Blocked by admin";
+    }
+  }
   const tools = await reorderTools(db, await listTools(db));
   const health = await probeAll(tools);
   const statusById = new Map(health.statuses.map((s) => [s.id, s.status]));
   return jsonResponse(200, {
-    user: { id: "public-player", displayName: "VIP PLAYER", joinedAt: "2026-01-01T00:00:00.000Z", vipAccess: true },
+    user: { id: "public-player", displayName: "VIP PLAYER", joinedAt: "2026-01-01T00:00:00.000Z", vipAccess: !accessBlocked },
     stats: {
       totalTools: tools.length,
       onlineTools: health.statuses.filter((s) => s.status === "online").length,
@@ -228,6 +239,8 @@ async function handleVipHub(db: D1Database, request: Request): Promise<Response>
     },
     tools: tools.map((tool) => ({ ...toolToPublic(tool), status: statusById.get(tool.id) ?? "online" })),
     recentActivity: [],
+    accessBlocked,
+    blockReason,
   });
 }
 
@@ -316,6 +329,11 @@ async function handleVipStatus(db: D1Database, request: Request): Promise<Respon
   if (!key) return jsonResponse(400, { ok: false, error: "Key required" });
   const row = await db.prepare("SELECT status FROM vip_members WHERE member_key = ?").bind(key).first<{ status: string }>();
   if (!row) return jsonResponse(404, { ok: false, error: "Unknown key" });
+  // A blocked member is treated as not-vip: gateway kicks them out until re-pay.
+  const block = await db.prepare("SELECT reason FROM vip_blocks WHERE member_key = ?").bind(key).first<{ reason: string | null }>();
+  if (block) {
+    return jsonResponse(200, { ok: true, status: "blocked", reason: block.reason ?? "Blocked by admin" });
+  }
   return jsonResponse(200, { ok: true, status: row.status });
 }
 
@@ -424,6 +442,10 @@ export default {
         if (ff) return corsResponse(ff, request);
       }
       if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
+      if (path === "/music") {
+        const mrow = await env.db.prepare("SELECT value FROM site_config WHERE key = 'gateway_music_url'").first<{ value: string }>();
+        return corsResponse(jsonResponse(200, { url: mrow?.value ?? null }), request);
+      }
       if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });
     } catch (error) {
