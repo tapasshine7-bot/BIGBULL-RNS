@@ -174,7 +174,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, mu] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, mu, fa] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),
@@ -193,6 +193,7 @@ export function ControlPage() {
       adminListGatewayAnnouncements(),
       adminListUidSeed(),
       adminGetMusic(),
+      adminGetFfApiKey(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
     if (mo.status === 'fulfilled' && Array.isArray(mo.value)) setMonitors(mo.value);
@@ -226,6 +227,10 @@ export function ControlPage() {
       const url = (mu.value as { url?: string | null }).url;
       setCurrentMusicUrl(url ?? null);
       setMusicUrl(url ?? '');
+    }
+    if (fa.status === 'fulfilled' && fa.value && typeof fa.value === 'object' && 'masked' in fa.value) {
+      const ff = fa.value as { ok?: boolean; masked?: string | null };
+      setFfKeyMasked(ff.masked ?? null);
     }
     if (ga.status === 'fulfilled' && ga.value && typeof ga.value === 'object') {
       const payload = ga.value as { announcements?: unknown };
