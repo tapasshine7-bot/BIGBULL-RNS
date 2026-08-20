@@ -1215,8 +1215,8 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
         if (bytes.byteLength > 10 * 1024 * 1024) {
           return safeJson(400, { ok: false, error: "File is larger than 10 MB — pick a smaller MP3." }, request);
         }
-        if (bytes.byteLength > 900 * 1024) {
-          return safeJson(400, { ok: false, error: "File is larger than 1 MB — the site hosts music on its own server (limit 1 MB). Compress the MP3 (e.g. 128 kbps) or paste a smaller file." }, request);
+        if (bytes.byteLength > 3 * 1024 * 1024) {
+          return safeJson(400, { ok: false, error: "File is larger than 3 MB — the site hosts music on its own server (limit 3 MB). Compress the MP3 (e.g. 64–128 kbps) or trim it shorter." }, request);
         }
         const base64 = uint8ToBase64(new Uint8Array(bytes));
         await db
