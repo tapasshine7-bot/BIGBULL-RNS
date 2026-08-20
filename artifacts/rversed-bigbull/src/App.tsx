@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { AppShell } from '@/components/app-shell';
+import Entrance from '@/pages/entrance';
 import { StartupPage } from '@/pages/startup-page';
 import { GatewayPage } from '@/pages/gateway-page';
 import { VipPage } from '@/pages/vip-page';
@@ -33,7 +34,8 @@ function Router() {
     // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={StartupPage} />
+        <Route path="/startup"><AppShell><StartupPage /></AppShell></Route>
+        <Route path="/" component={Entrance} />
         <Route path="/gateway"><AppShell><GatewayPage /></AppShell></Route>
         <Route path="/vip"><AppShell><VipPage /></AppShell></Route>
         <Route path="/bio"><AppShell><BioPage /></AppShell></Route>
