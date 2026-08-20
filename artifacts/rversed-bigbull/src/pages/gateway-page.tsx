@@ -250,6 +250,26 @@ export function GatewayPage() {
           <div className="dashboard-card-art dashboard-vip-art" aria-hidden="true"><span>♛</span></div>
         </article>
       </LockedCardWrap>
+
+      {/* Emergency key restore — directly below the VIP Hub dashboard card */}
+      <div className="gateway-restore-row">
+        {restoreOpen ? (
+          <RestoreKeyPanel
+            status={restoreStatus}
+            error={restoreError}
+            value={restoreKey}
+            onChange={setRestoreKey}
+            onClose={() => setRestoreOpen(false)}
+            onConfirm={handleRestore}
+          />
+        ) : (
+          <button type="button" onClick={() => setRestoreOpen(true)} className="gateway-restore-trigger" data-testid="button-emergency-key-restore">
+            <span className="gateway-restore-label">In emergency, use your VIP key</span>
+            <span className="gateway-restore-hint">Forgot your key or changed phone? Restore VIP access here.</span>
+            <span aria-hidden="true" className="gateway-restore-arrow">→</span>
+          </button>
+        )}
+      </div>
     </section>
 
     {/* Big floating caution banner — placed below the dashboard cards so a locked card stays visible and tappable */}
@@ -261,26 +281,6 @@ export function GatewayPage() {
         isUpdate={isUpdateMode}
       />
     ) : null}
-
-    {/* Emergency key restore — placed below the dashboard cards (outside them). */}
-    <div className="gateway-restore-row">
-      {restoreOpen ? (
-        <RestoreKeyPanel
-          status={restoreStatus}
-          error={restoreError}
-          value={restoreKey}
-          onChange={setRestoreKey}
-          onClose={() => setRestoreOpen(false)}
-          onConfirm={handleRestore}
-        />
-      ) : (
-        <button type="button" onClick={() => setRestoreOpen(true)} className="gateway-restore-trigger" data-testid="button-emergency-key-restore">
-          <span className="gateway-restore-label">In emergency, use your VIP key</span>
-          <span className="gateway-restore-hint">Forgot your key or changed phone? Restore VIP access here.</span>
-          <span aria-hidden="true" className="gateway-restore-arrow">→</span>
-        </button>
-      )}
-    </div>
 
     <section className="dashboard-install-section" aria-label="Install app">
       <div className="dashboard-install-inner">

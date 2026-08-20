@@ -842,6 +842,13 @@ function IncidentsTab({
   );
 }
 
+function formatIST(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.valueOf())) return iso;
+  const ist = new Date(d.getTime() + 5.5 * 3600_000);
+  return `${ist.getUTCHours().toString().padStart(2, '0')}:${ist.getUTCMinutes().toString().padStart(2, '0')} IST`;
+}
+
 function BroadcastTab({
   bannerText,
   setBannerText,
@@ -869,7 +876,7 @@ function BroadcastTab({
   setBannerTtl: (value: string) => void;
   bannerStart: string;
   setBannerStart: (value: string) => void;
-  maintenance: { enabled: boolean; message: string };
+  maintenance: { enabled: boolean; message: string; mode?: string; scheduledEnd?: string | null };
   onPushBanner: () => void;
   onClearBanner: () => void;
   onToggleMaintenance: (enabled: boolean) => void;
@@ -877,11 +884,11 @@ function BroadcastTab({
   busyBanner: boolean;
   busyMaintenance: boolean;
   maintenanceScope: 'both' | 'bio' | 'vip';
-  onScopeChange: (scope: 'both' | 'bio' | 'vip') => void;
   maintenanceMode: 'maintenance' | 'update';
   onModeChange: (mode: 'maintenance' | 'update') => void;
   scheduledEnd: string;
   onScheduledEndChange: (value: string) => void;
+  onScopeChange: (scope: 'both' | 'bio' | 'vip') => void;
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -934,30 +941,31 @@ function BroadcastTab({
         </div>
       </div>
 
-      <div className="border border-border bg-card/60 px-3.5 py-3">
-        <div className="mb-3 flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
-          <Wrench size={13} className="text-amber-300" /> Maintenance / update mode
+      <div className={`px-3.5 py-3 ${maintenance.enabled ? (maintenanceMode === 'update' ? 'border border-amber-400/60 bg-amber-500/10' : 'border border-red-400/60 bg-red-500/10') : 'border border-border bg-card/60'}`}>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-display text-sm font-bold uppercase tracking-wide">
+            <Wrench size={13} className="text-amber-300" /> {maintenance.enabled ? (maintenanceMode === 'update' ? 'Update mode is ON' : 'Maintenance mode is ON') : 'Maintenance / update mode'}
+          </div>
+          <div className="flex gap-1.5">
+            {(['maintenance', 'update'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => onModeChange(mode)}
+                disabled={busyMaintenance}
+                className={`border px-2.5 py-1 text-mono text-[8px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
+                  maintenanceMode === mode
+                    ? 'border-amber-400/70 bg-amber-400/20 text-amber-200'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+                data-testid={`button-mode-${mode}`}
+              >
+                {mode === 'maintenance' ? 'Maintenance' : 'Update'}
+              </button>
+            ))}
+          </div>
         </div>
-        <label className="text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">What kind</label>
-        <div className="mt-1.5 flex gap-1.5">
-          {(['maintenance', 'update'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onModeChange(mode)}
-              disabled={busyMaintenance}
-              className={`border px-2.5 py-1 text-mono text-[8px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
-                maintenanceMode === mode
-                  ? 'border-accent/60 bg-accent/15 text-accent'
-                  : 'border-border text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid={`button-mode-${mode}`}
-            >
-              {mode === 'maintenance' ? 'Maintenance' : 'Update'}
-            </button>
-          ))}
-        </div>
-        <div className="mt-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">
+        <div className="mt-1 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">
           Both lock the chosen dashboard — "Update" just says Update in the visitor banner instead of Maintenance.
         </div>
         <label className="mt-3 text-mono text-[9px] uppercase tracking-[.2em] text-muted-foreground">Which dashboard</label>
@@ -1002,22 +1010,37 @@ function BroadcastTab({
         <div className="mt-1 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground">
           The site switches itself back ON at this exact time — no need to come back.
         </div>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             onClick={() => onToggleMaintenance(!maintenance.enabled)}
             disabled={busyMaintenance}
-            className={`flex items-center gap-1.5 border px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
+            className={`flex flex-1 items-center justify-center gap-1.5 border px-3 py-2.5 text-mono text-[10px] uppercase tracking-[.18em] transition disabled:opacity-50 ${
               maintenance.enabled
                 ? 'border-red-400/60 bg-red-500/15 text-red-200 hover:bg-red-500/25'
-                : 'border-accent/50 bg-accent/10 text-accent hover:bg-accent/20'
+                : 'border-amber-400/60 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20'
             }`}
             data-testid="button-maintenance-toggle"
           >
-            <ArrowLeftRight size={11} /> {maintenance.enabled
-              ? `${maintenanceMode === 'update' ? 'Update' : 'Maintenance'} is ON — tap to end`
-              : `Start ${maintenanceMode === 'update' ? 'update' : 'maintenance'} mode`}
+            {maintenance.enabled ? (
+              <>
+                <ArrowLeftRight size={12} /> {maintenanceMode === 'update' ? 'END UPDATE MODE' : 'END MAINTENANCE MODE'}
+              </>
+            ) : (
+              <>
+                <AlertTriangle size={12} /> Start {maintenanceMode === 'update' ? 'update' : 'maintenance'} mode
+              </>
+            )}
           </button>
         </div>
+        {maintenance.enabled && (
+          <div className={`mt-3 flex items-center gap-2 border px-3 py-2 ${maintenanceMode === 'update' ? 'border-amber-400/50 bg-amber-500/15 text-amber-200' : 'border-red-400/50 bg-red-500/15 text-red-200'}`}>
+            <AlertTriangle size={12} />
+            <span className="text-mono text-[9px] uppercase tracking-[.16em]">
+              {maintenanceMode === 'update' ? 'UPDATE IN PROGRESS' : 'MAINTENANCE IN PROGRESS'} — {maintenanceScope === 'both' ? 'whole site' : maintenanceScope === 'bio' ? 'Bio Tool' : 'VIP Hub'} is locked
+              {maintenance.scheduledEnd ? ` · reopens ${formatIST(maintenance.scheduledEnd)}` : ' · no auto-reopen set'}
+            </span>
+          </div>
+        )}
         <div className="mt-4 text-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground">
           {maintenanceScope === 'both'
             ? `While ON, every visitor sees only the ${maintenanceMode === 'update' ? 'update' : 'maintenance'} screen until you switch it off.`
