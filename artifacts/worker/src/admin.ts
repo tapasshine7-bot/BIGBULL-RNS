@@ -481,7 +481,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
   if (requiresAuth && !(await resolveSession(db, adminToken(request)))) {
     return safeJson(401, { ok: false, error: "Not signed in" }, request);
   }
-  if (request.method !== "GET" && request.method !== "POST") {
+  if (request.method !== "GET" && request.method !== "POST" && request.method !== "DELETE") {
     return safeJson(405, { ok: false, error: "Method not allowed" }, request);
   }
 
@@ -513,6 +513,97 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const token = adminToken(request);
       if (token) await db.prepare("DELETE FROM admin_sessions WHERE token = ?").bind(token).run();
       return safeJson(200, { ok: true }, request);
+    }
+
+    // GET /api/admin/vip/analytics — VIP members, pending payments, weekly revenue.
+    if (path === "/vip/analytics" && request.method === "GET") {
+      const total = await db.prepare("SELECT COUNT(*) AS n FROM vip_members").first<{ n: number }>();
+      const vip = await db.prepare("SELECT COUNT(*) AS n FROM vip_members WHERE status = 'vip'").first<{ n: number }>();
+      const pendingMembers = await db.prepare("SELECT COUNT(*) AS n FROM vip_members WHERE status != 'vip'").first<{ n: number }>();
+      const pendingPays = await db.prepare("SELECT COUNT(*) AS n FROM vip_payments WHERE status = 'pending'").first<{ n: number }>();
+      const approvedPays = await db.prepare("SELECT COUNT(*) AS n FROM vip_payments WHERE status = 'approved'").first<{ n: number }>();
+      const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const weekApproved = await db.prepare("SELECT COUNT(*) AS n FROM vip_payments WHERE status = 'approved' AND created_at >= ?").bind(weekAgo).first<{ n: number }>();
+      return safeJson(200, {
+        totalMembers: Number(total?.n ?? 0),
+        vipMembers: Number(vip?.n ?? 0),
+        pendingMembers: Number(pendingMembers?.n ?? 0),
+        pendingPayments: Number(pendingPays?.n ?? 0),
+        totalApprovedPayments: Number(approvedPays?.n ?? 0),
+        approvedThisWeek: Number(weekApproved?.n ?? 0),
+        revenueRs: Number(approvedPays?.n ?? 0) * 20,
+        fetchedAt: new Date().toISOString(),
+      }, request);
+    }
+
+    // Gateway announcements shown on the gateway page (VIP-only or all visitors).
+    if (path === "/announcements" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { title?: unknown; bodyText?: unknown; body?: unknown; audience?: unknown; startsAt?: unknown; endsAt?: unknown };
+      const title = String((b.title ?? "")).trim().slice(0, 120);
+      if (!title) return safeJson(400, { ok: false, error: "Title is required" }, request);
+      const bodyText = String((b.bodyText ?? b.body ?? "")).trim().slice(0, 2000);
+      const audience = b.audience === "vip" ? "vip" : "all";
+      const startsAt = typeof b.startsAt === "string" && b.startsAt ? b.startsAt : new Date().toISOString();
+      const endsAt = typeof b.endsAt === "string" && b.endsAt ? b.endsAt : null;
+      await db
+        .prepare("INSERT INTO gateway_announcements (title, body, audience, starts_at, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(title, bodyText, audience, startsAt, endsAt, new Date().toISOString())
+        .run();
+      await audit(db, "Tapas123", "announcement.create", "gateway_announcements", { title, audience }, "info").catch(() => {});
+      return safeJson(200, { ok: true, title, audience, startsAt, endsAt }, request);
+    }
+    if (path === "/announcements" && request.method === "GET") {
+      const rows = await db.prepare("SELECT id, title, body, audience, starts_at, ends_at, created_at FROM gateway_announcements ORDER BY id DESC LIMIT 50").all();
+      return safeJson(200, { announcements: rows.results, fetchedAt: new Date().toISOString() }, request);
+    }
+    if (/^\/announcements\/\d+$/.test(path) && request.method === "DELETE") {
+      const id = Number(path.split("/").pop());
+      const row = await db.prepare("SELECT id, title FROM gateway_announcements WHERE id = ?").bind(id).first<{ id: number; title: string }>();
+      if (!row) return safeJson(404, { ok: false, error: "Announcement not found" }, request);
+      await db.prepare("DELETE FROM gateway_announcements WHERE id = ?").bind(id).run();
+      await audit(db, "Tapas123", "announcement.delete", "gateway_announcements", { id, title: row.title }, "info").catch(() => {});
+      return safeJson(200, { ok: true, deleted: id }, request);
+    }
+
+    // VIP Hub guide cards — per-tool "How to Use" steps (admin seeds/edits).
+    if (path === "/guides" && request.method === "GET") {
+      const rows = await db.prepare("SELECT tool_id, title, steps_json, tips_json, created_at FROM vip_guide_cards ORDER BY tool_id").all();
+      return safeJson(200, { guides: rows.results, fetchedAt: new Date().toISOString() }, request);
+    }
+    if (path === "/guides" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const b = (body ?? {}) as { tool_id?: unknown; title?: unknown; steps?: unknown; tips?: unknown };
+      const toolId = String((b.tool_id ?? "")).trim();
+      const title = String((b.title ?? "")).trim().slice(0, 120);
+      if (!toolId || !title) return safeJson(400, { ok: false, error: "tool_id and title are required" }, request);
+      await db
+        .prepare(
+          "INSERT INTO vip_guide_cards (tool_id, title, steps_json, tips_json, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(tool_id) DO UPDATE SET title=excluded.title, steps_json=excluded.steps_json, tips_json=excluded.tips_json",
+        )
+        .bind(toolId, title, JSON.stringify(b.steps ?? []), JSON.stringify(b.tips ?? []), new Date().toISOString())
+        .run();
+      return safeJson(200, { ok: true, toolId, title }, request);
+    }
+
+    // Tool ordering in VIP Hub — set display positions.
+    if (path === "/tool-order" && request.method === "POST") {
+      const body = (await request.json().catch(() => null)) as { order?: Array<{ tool_id?: string; position?: number } | string> } | null;
+      const order: Array<{ tool_id?: string; position?: number } | string> = Array.isArray(body?.order) ? (body!.order as Array<{ tool_id?: string; position?: number } | string>) : [];
+      const stmts: D1PreparedStatement[] = [];
+      for (const item of order) {
+        const toolId = typeof item === "string" ? item : (item as { tool_id?: string })?.tool_id;
+        const pos = typeof item === "number" ? item : Number(((item as { position?: number })?.position ?? 99));
+        if (typeof toolId !== "string" || !toolId) continue;
+        stmts.push(
+          db
+            .prepare("INSERT INTO tool_ordering (tool_id, position, updated_at) VALUES (?, ?, ?) ON CONFLICT(tool_id) DO UPDATE SET position=excluded.position, updated_at=excluded.updated_at")
+            .bind(toolId, Number.isFinite(pos) ? pos : 99, new Date().toISOString()),
+        );
+      }
+      if (stmts.length > 0) await db.batch(stmts);
+      await audit(db, "Tapas123", "tool_order.update", "tool_ordering", { updated: stmts.length }, "info").catch(() => {});
+      return safeJson(200, { ok: true, updated: stmts.length }, request);
     }
 
     // GET /api/admin/overview
@@ -800,8 +891,8 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const b = (body ?? {}) as { locked?: unknown };
       const locked = Boolean(b.locked);
       const state: MaintenanceState = locked
-        ? { enabled: true, message: "Site locked by admin — full maintenance in progress.", scope: "both", scheduledEnd: null }
-        : { enabled: false, message: "", scope: "both", scheduledEnd: null };
+        ? { enabled: true, message: "Site locked by admin — full maintenance in progress.", scope: "both", mode: "maintenance", scheduledEnd: null }
+        : { enabled: false, message: "", scope: "both", mode: "maintenance", scheduledEnd: null };
       await writeConfig(db, "maintenance_mode", state);
       await audit(db, "Tapas123", "emergency.lock", "maintenance", { locked }, locked ? "warning" : "info");
       return safeJson(200, { ok: true, locked }, request);

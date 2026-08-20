@@ -1,10 +1,12 @@
 import { ArrowUpRight, Briefcase, CheckCircle2, Copy, Crosshair, ExternalLink, Gift, Layers, LoaderCircle, LockKeyhole, Moon, Search, Smile, Sun, Swords, ThumbsUp, Wrench, X } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { getGetVipHubQueryKey, useGetVipHub } from '@workspace/api-client-react';
 import { PageHeading, QueryError, QueryLoading, EmptyState } from '@/components/page-kit';
 import { StatusPill } from '@/components/status-pill';
 import { fetchBannerState, vipPay, vipPayConfig, vipStatus, type AdminMaintenance, type VipPayConfig, type VipStatus } from '@/lib/admin';
+import { getGuides, type GuideCard } from '@/lib/ff-api';
 
 function useStoredMember(): { key: string | null; status: string | null } {
   const [entry, setEntry] = useState<{ key: string | null; status: string | null }>(() => {
@@ -317,7 +319,93 @@ function VipHubInner({
       </div>
       {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : filtered.length === 0 ? <div className="border border-border bg-card p-8 text-center text-sm text-muted-foreground">No tools match “{search.trim()}”.</div> : <div className="grid gap-4 md:grid-cols-2">{filtered.map((tool, index) => <PartnerCard key={tool.id} tool={tool} index={index} />)}</div>}
       <div className="mt-8 flex items-center gap-3 text-xs text-muted-foreground"><ExternalLink size={14} className="text-accent" /> Partner tools open outside the gateway. The gateway remains available here.</div>
+
+      <GuideCardsSection />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "How to Use" guide cards — one per partner tool, real data from D1
+// ---------------------------------------------------------------------------
+function GuideCardsSection() {
+  const [guides, setGuides] = useState<GuideCard[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getGuides()
+      .then((list) => {
+        if (cancelled) return;
+        setGuides(list);
+      })
+      .catch(() => {
+        /* guides are cosmetic — fail silently */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (guides.length === 0) return null;
+
+  return (
+    <section className="mt-10" aria-label="How to use each tool">
+      <div className="mb-4 flex items-center gap-2">
+        <BookOpen size={14} className="text-primary" />
+        <h2 className="text-display text-2xl uppercase tracking-wider">How to use.</h2>
+      </div>
+      <p className="mb-4 text-sm leading-6 text-muted-foreground">A quick run-through for every partner tool in the VIP Hub — open a guide, follow the steps, done.</p>
+      <div className="space-y-2">
+        {guides.map((guide) => {
+          const open = openId === guide.tool_id;
+          const steps = (guide.steps ?? []) as Array<string | { step?: string; text?: string }>;
+          const tips = (guide.tips ?? []) as string[];
+          const normalizedSteps = steps.map((entry) => (typeof entry === 'string' ? entry : (entry.text ?? entry.step ?? ''))).filter((text) => text.trim());
+          return (
+            <article key={guide.tool_id} className="border border-border bg-card/60 transition hover:border-primary/40" data-testid={`guide-${guide.tool_id}`}>
+              <button
+                type="button"
+                onClick={() => setOpenId(open ? null : guide.tool_id)}
+                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                aria-expanded={open}
+                data-testid={`button-guide-${guide.tool_id}`}
+              >
+                <span className="min-w-0 flex-1 text-sm font-semibold">{guide.title}</span>
+                {open ? <ChevronUp size={14} className="shrink-0 text-muted-foreground" /> : <ChevronDown size={14} className="shrink-0 text-muted-foreground" />}
+              </button>
+              {open ? (
+                <div className="border-t border-border px-4 py-4">
+                  {normalizedSteps.length > 0 ? (
+                    <ol className="space-y-2.5">
+                      {normalizedSteps.map((text, index) => (
+                        <li key={index} className="flex items-start gap-2.5 text-sm leading-6 text-muted-foreground">
+                          <span className="mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border border-primary/50 bg-primary/10 text-[9px] font-bold text-primary">{index + 1}</span>
+                          {text}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                  {tips.length > 0 ? (
+                    <div className="mt-4 flex items-start gap-2 border border-border bg-background/50 p-3">
+                      <Lightbulb size={13} className="mt-0.5 shrink-0 text-amber-300" />
+                      <ul className="space-y-1 text-xs leading-5 text-muted-foreground">
+                        {tips.map((tip, index) => (
+                          <li key={index} className="flex items-start gap-2"><CheckCircle2 size={12} className="mt-0.5 shrink-0 text-accent" />{tip}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <a href="/vip" className="mt-4 inline-flex items-center gap-1.5 text-mono text-[9px] uppercase tracking-[.18em] text-primary hover:underline" data-testid={`link-guide-launch-${guide.tool_id}`}>
+                    Open {guide.title} <ArrowRight size={12} />
+                  </a>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

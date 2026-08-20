@@ -454,3 +454,68 @@ export async function adminVipConfigSave(upiId: string, upiName: string, amount:
     body: JSON.stringify({ upiId, upiName, amount, qrDataUrl }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// FF Studio — VIP analytics, gateway announcements, guide cards, tool ordering
+// ---------------------------------------------------------------------------
+
+export type AdminVipAnalytics = {
+  totalMembers?: number;
+  vipMembers?: number;
+  pendingPayments?: number;
+  revenueRs?: number;
+};
+
+export async function adminVipAnalytics() {
+  return adminFetch<AdminVipAnalytics>('/vip/analytics');
+}
+
+export type AdminGatewayAnnouncement = {
+  id: number;
+  title: string;
+  body: string | null;
+  audience?: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  created_at?: string;
+};
+
+export async function adminListGatewayAnnouncements() {
+  return adminFetch<AdminGatewayAnnouncement[]>('/announcements');
+}
+
+export async function adminPostGatewayAnnouncement(title: string, body: string, audience = 'all', startsAt: string | null = null, endsAt: string | null = null) {
+  return adminFetch<{ ok: boolean }>('/announcements', {
+    method: 'POST',
+    body: JSON.stringify({ title, body, audience, starts_at: startsAt, ends_at: endsAt }),
+  });
+}
+
+export async function adminDeleteGatewayAnnouncement(id: number) {
+  const token = readAdminToken();
+  const response = await fetch(`${adminApiPath('/announcements')}/${encodeURIComponent(String(id))}`, {
+    method: 'DELETE',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { 'x-admin-token': token } : {}),
+    },
+  });
+  const data = (await response.json().catch(() => null)) as { ok?: boolean } | null;
+  return { ok: Boolean(data?.ok) };
+}
+
+export type AdminGuideCard = { tool_id: string; title: string; steps?: string[]; tips?: string[] };
+
+export async function adminPostGuides(guide: AdminGuideCard) {
+  return adminFetch<{ ok: boolean }>('/guides', {
+    method: 'POST',
+    body: JSON.stringify(guide),
+  });
+}
+
+export async function adminPostToolOrder(toolId: string, position: number) {
+  return adminFetch<{ ok: boolean }>('/tool-order', {
+    method: 'POST',
+    body: JSON.stringify({ order: [{ tool_id: toolId, position }] }),
+  });
+}

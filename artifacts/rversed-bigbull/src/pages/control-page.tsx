@@ -24,6 +24,7 @@ import {
   Siren,
   Trash2,
   Wrench,
+  Flame,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { EmptyState } from '@/components/page-kit';
@@ -60,12 +61,18 @@ import {
   adminGetVip,
   adminVipConfigGet,
   adminVipConfigSave,
+  adminVipAnalytics,
+  adminListGatewayAnnouncements,
+  adminPostGatewayAnnouncement,
+  adminDeleteGatewayAnnouncement,
+  adminPostGuides,
+  adminPostToolOrder,
   fetchBannerState,
   readAdminToken,
   setAdminToken,
 } from '@/lib/admin';
 
-type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary' | 'siteops';
+type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary' | 'siteops' | 'ffstudio';
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: <Gauge size={13} /> },
@@ -76,6 +83,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'audit', label: 'Audit log', icon: <ClipboardList size={13} /> },
   { id: 'summary', label: 'Reports', icon: <Activity size={13} /> },
   { id: 'siteops', label: 'Site Ops', icon: <Boxes size={13} /> },
+  { id: 'ffstudio', label: 'FF Studio', icon: <Flame size={13} /> },
 ];
 
 function formatTime(value: string | null) {
@@ -132,6 +140,10 @@ export function ControlPage() {
   const [upiAmount, setUpiAmount] = useState('20');
   const [upiQr, setUpiQr] = useState('');
 
+  // FF Studio — VIP analytics + gateway announcements
+  const [vipAnalytics, setVipAnalytics] = useState<{ totalMembers?: number; vipMembers?: number; pendingPayments?: number; revenueRs?: number } | null>(null);
+  const [gatewayAnnouncements, setGatewayAnnouncements] = useState<Array<{ id: number; title: string; body: string | null; audience: string; starts_at: string | null; ends_at: string | null; created_at: string }>>([]);
+
   function flash(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 3400);
@@ -140,7 +152,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),
@@ -155,6 +167,8 @@ export function ControlPage() {
       adminGetOrdering(),
       adminGetVip(),
       adminVipConfigGet(),
+      adminVipAnalytics(),
+      adminListGatewayAnnouncements(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
     if (mo.status === 'fulfilled' && Array.isArray(mo.value)) setMonitors(mo.value);
@@ -175,6 +189,11 @@ export function ControlPage() {
       if (Array.isArray(data.payments)) setVipPayments(data.payments);
     }
     if (vc.status === 'fulfilled' && vc.value && typeof vc.value === 'object' && 'upiId' in vc.value) setVipConfig(vc.value as never);
+    if (va.status === 'fulfilled' && va.value && typeof va.value === 'object' && 'totalMembers' in va.value) setVipAnalytics(va.value as never);
+    if (ga.status === 'fulfilled' && ga.value && typeof ga.value === 'object') {
+      const payload = ga.value as { announcements?: unknown };
+      if (Array.isArray(payload.announcements)) setGatewayAnnouncements(payload.announcements as never);
+    }
   }
 
   useEffect(() => {
@@ -599,6 +618,7 @@ export function ControlPage() {
           )}
           {tab === 'audit' && <AuditTab audit={audit} search={auditSearch} onSearchChange={setAuditSearch} />}
           {tab === 'summary' && <SummaryTab summary={summary} />}
+          {tab === 'ffstudio' && <FfStudioTab vipAnalytics={vipAnalytics} gatewayAnnouncements={gatewayAnnouncements} onRefresh={() => void refreshAll()} />}{' '}
           {tab === 'siteops' && (
             <SiteOpsTab
               stats={stats}
@@ -1653,6 +1673,325 @@ function SiteOpsTab({
           }))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FF Studio — VIP analytics, gateway announcements, guide cards, tool ordering
+// ---------------------------------------------------------------------------
+
+const FF_TOOL_IDS = ['all-in-one', 'ff-bind', 'ff-emote', 'ff-likes', 'gift', 'glory', 'reseller', 'default'];
+
+const FF_TOOL_LABELS: Record<string, string> = {
+  'all-in-one': 'All in One',
+  'ff-bind': 'FF Bind',
+  'ff-emote': 'FF Emote',
+  'ff-likes': 'FF Likes',
+  gift: 'FF Gift',
+  glory: 'Glory Tool',
+  reseller: 'Reseller Panel',
+  default: 'Other / new tool',
+};
+
+function FfStudioTab({
+  vipAnalytics,
+  gatewayAnnouncements,
+  onRefresh,
+}: {
+  vipAnalytics: { totalMembers?: number; vipMembers?: number; pendingPayments?: number; revenueRs?: number } | null;
+  gatewayAnnouncements: Array<{ id: number; title: string; body: string | null; audience: string; starts_at: string | null; ends_at: string | null; created_at: string }>;
+  onRefresh: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [audience, setAudience] = useState<'all' | 'vip'>('all');
+  const [endsAt, setEndsAt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  // Guide editor
+  const [guideToolId, setGuideToolId] = useState(FF_TOOL_IDS[0]);
+  const [guideTitle, setGuideTitle] = useState('');
+  const [guideSteps, setGuideSteps] = useState('');
+  const [guideTips, setGuideTips] = useState('');
+  const [guideBusy, setGuideBusy] = useState(false);
+
+  // Tool ordering
+  const [orderPos, setOrderPos] = useState<Record<string, number>>({});
+  const [orderBusy, setOrderBusy] = useState<string | null>(null);
+
+  async function handleCreateAnnouncement(event: React.FormEvent) {
+    event.preventDefault();
+    if (!title.trim() || busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const endsIso = endsAt ? new Date(endsAt).toISOString() : null;
+      const result = await adminPostGatewayAnnouncement(title.trim(), body.trim(), audience, null, endsIso);
+      if (result && result.ok) {
+        setMessage('Announcement is now pinned on the gateway.');
+        setTitle('');
+        setBody('');
+        setEndsAt('');
+        onRefresh();
+      } else {
+        setMessage((result as { error?: string } | null)?.error ?? 'Could not create the announcement.');
+      }
+    } catch {
+      setMessage('Network error — try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteAnnouncement(id: number) {
+    const result = await adminDeleteGatewayAnnouncement(id);
+    if (result && result.ok) onRefresh();
+  }
+
+  async function handleSaveGuide(event: React.FormEvent) {
+    event.preventDefault();
+    if (!guideTitle.trim() || guideBusy) return;
+    setGuideBusy(true);
+    setMessage('');
+    try {
+      const steps = guideSteps
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const tips = guideTips
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const result = await adminPostGuides({ tool_id: guideToolId, title: guideTitle.trim(), steps, tips });
+      if (result && result.ok) {
+        setMessage(`Guide saved for ${FF_TOOL_LABELS[guideToolId] ?? guideToolId} — it will appear in the VIP Hub.`);
+        setGuideTitle('');
+        setGuideSteps('');
+        setGuideTips('');
+      } else {
+        setMessage((result as { error?: string } | null)?.error ?? 'Could not save the guide.');
+      }
+    } catch {
+      setMessage('Network error — try again.');
+    } finally {
+      setGuideBusy(false);
+    }
+  }
+
+  async function handleOrderChange(toolId: string, delta: number) {
+    const current = orderPos[toolId] ?? 99;
+    const next = Math.max(1, current + delta);
+    setOrderPos((currentMap) => ({ ...currentMap, [toolId]: next }));
+    setOrderBusy(toolId);
+    setMessage('');
+    try {
+      const result = await adminPostToolOrder(toolId, next);
+      if (result && result.ok) {
+        setMessage(`${FF_TOOL_LABELS[toolId] ?? toolId} position set to ${next}.`);
+      } else {
+        setMessage((result as { error?: string } | null)?.error ?? 'Could not update the order.');
+      }
+    } catch {
+      setMessage('Network error — try again.');
+    } finally {
+      setOrderBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">
+        <Flame size={12} className="text-accent" /> FF Studio — VIP analytics, gateway announcements, guide cards and tool ordering
+      </div>
+
+      {/* VIP analytics */}
+      <div>
+        <div className="mb-2 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">VIP hub analytics (live)</div>
+        {vipAnalytics ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatBlock label="Total members" value={String(vipAnalytics.totalMembers ?? 0)} />
+            <StatBlock label="VIP members" value={String(vipAnalytics.vipMembers ?? 0)} tone="accent" />
+            <StatBlock label="Pending payments" value={String(vipAnalytics.pendingPayments ?? 0)} tone={vipAnalytics.pendingPayments ? 'red' : 'foreground'} />
+            <StatBlock label="Revenue (₹)" value={String(vipAnalytics.revenueRs ?? 0)} tone="accent" />
+          </div>
+        ) : (
+          <div className="border border-border bg-card/60 px-3 py-4 text-xs text-muted-foreground">Loading analytics…</div>
+        )}
+      </div>
+
+      {/* Gateway announcements */}
+      <div>
+        <div className="mb-2 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">Gateway announcements (shown on the site)</div>
+        <form onSubmit={handleCreateAnnouncement} className="mb-3 space-y-2 border border-border bg-card/60 p-3">
+          <input
+            type="text"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Title (e.g. New partner tool added)"
+            maxLength={120}
+            className="w-full border border-border bg-background px-2.5 py-1.5 text-sm"
+            data-testid="input-announcement-title"
+          />
+          <textarea
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="Body — short, mobile-friendly. Max ~350 characters."
+            maxLength={2000}
+            rows={3}
+            className="w-full border border-border bg-background px-2.5 py-1.5 text-sm"
+            data-testid="input-announcement-body"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Audience
+              <select value={audience} onChange={(event) => setAudience(event.target.value as 'all' | 'vip')} className="border border-border bg-background px-1.5 py-1 text-xs" data-testid="select-announcement-audience">
+                <option value="all">All visitors</option>
+                <option value="vip">VIP members only</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Pinned until
+              <input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} className="border border-border bg-background px-1.5 py-1 text-xs" data-testid="input-announcement-ends-at" />
+            </label>
+            <button
+              type="submit"
+              disabled={busy || !title.trim()}
+              className="ml-auto border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.16em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+              data-testid="button-create-announcement"
+            >
+              {busy ? 'Posting…' : 'Post announcement'}
+            </button>
+          </div>
+        </form>
+        <div className="space-y-1.5">
+          {gatewayAnnouncements.length === 0 ? (
+            <div className="border border-border bg-card/60 px-3 py-4 text-center text-xs text-muted-foreground">No gateway announcements yet.</div>
+          ) : (
+            gatewayAnnouncements.map((item) => (
+              <div key={item.id} className="flex items-start gap-3 border border-border bg-card/60 px-3 py-2.5" data-testid={`announcement-row-${item.id}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-xs font-semibold">{item.title}</span>
+                    <span className={`border px-1 py-0.5 text-[8px] uppercase tracking-[.14em] ${item.audience === 'vip' ? 'border-accent/50 text-accent' : 'border-border text-muted-foreground'}`}>{item.audience}</span>
+                  </div>
+                  {item.body ? <div className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted-foreground">{item.body}</div> : null}
+                  <div className="mt-1 text-mono text-[8px] uppercase tracking-[.14em] text-muted-foreground">
+                    {formatTime(item.starts_at)} → {formatTime(item.ends_at)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAnnouncement(item.id)}
+                  className="shrink-0 border border-border px-1.5 py-1 text-muted-foreground transition hover:border-red-400/50 hover:text-red-300"
+                  aria-label="Delete announcement"
+                  data-testid={`button-delete-announcement-${item.id}`}
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Guide cards editor */}
+      <div>
+        <div className="mb-2 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">VIP Hub guide cards — “How to use” steps</div>
+        <form onSubmit={handleSaveGuide} className="space-y-2 border border-border bg-card/60 p-3">
+          <div className="flex flex-wrap gap-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Tool
+              <select value={guideToolId} onChange={(event) => setGuideToolId(event.target.value)} className="border border-border bg-background px-1.5 py-1 text-xs" data-testid="select-guide-tool">
+                {FF_TOOL_IDS.map((id) => (
+                  <option key={id} value={id}>{FF_TOOL_LABELS[id] ?? id}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <input
+            type="text"
+            value={guideTitle}
+            onChange={(event) => setGuideTitle(event.target.value)}
+            placeholder="Guide title (e.g. Glory Tool — claim free diamonds)"
+            maxLength={120}
+            className="w-full border border-border bg-background px-2.5 py-1.5 text-sm"
+            data-testid="input-guide-title"
+          />
+          <textarea
+            value={guideSteps}
+            onChange={(event) => setGuideSteps(event.target.value)}
+            placeholder="Steps — one per line (each line becomes a numbered step)"
+            rows={4}
+            className="w-full border border-border bg-background px-2.5 py-1.5 text-sm"
+            data-testid="input-guide-steps"
+          />
+          <textarea
+            value={guideTips}
+            onChange={(event) => setGuideTips(event.target.value)}
+            placeholder="Pro tips — one per line (optional)"
+            rows={2}
+            className="w-full border border-border bg-background px-2.5 py-1.5 text-sm"
+            data-testid="input-guide-tips"
+          />
+          <button
+            type="submit"
+            disabled={guideBusy || !guideTitle.trim()}
+            className="border border-accent/50 bg-accent/10 px-3 py-1.5 text-mono text-[8px] uppercase tracking-[.16em] text-accent transition hover:bg-accent/20 disabled:opacity-50"
+            data-testid="button-save-guide"
+          >
+            {guideBusy ? 'Saving…' : 'Save guide card'}
+          </button>
+        </form>
+      </div>
+
+      {/* Tool ordering */}
+      <div>
+        <div className="mb-2 text-mono text-[8px] uppercase tracking-[.2em] text-muted-foreground">VIP Hub tool ordering — set display position</div>
+        <div className="space-y-1.5 border border-border bg-card/60 p-3">
+          {FF_TOOL_IDS.map((id) => (
+            <div key={id} className="flex items-center gap-3 py-1">
+              <span className="min-w-0 flex-1 truncate text-xs">{FF_TOOL_LABELS[id] ?? id}</span>
+              <button
+                type="button"
+                onClick={() => void handleOrderChange(id, -1)}
+                disabled={orderBusy !== null}
+                className="border border-border px-2 py-1 text-mono text-[8px] text-muted-foreground transition hover:text-accent disabled:opacity-50"
+                aria-label={`Move ${id} earlier`}
+                data-testid={`button-order-up-${id}`}
+              >
+                ▲
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={orderPos[id] ?? 99}
+                onChange={(event) => setOrderPos((current) => ({ ...current, [id]: Number(event.target.value) || 99 }))}
+                className="w-14 border border-border bg-background px-1.5 py-1 text-center text-mono text-[10px]"
+                data-testid={`input-order-pos-${id}`}
+              />
+              <button
+                type="button"
+                onClick={() => void handleOrderChange(id, 1)}
+                disabled={orderBusy !== null}
+                className="border border-border px-2 py-1 text-mono text-[8px] text-muted-foreground transition hover:text-accent disabled:opacity-50"
+                aria-label={`Move ${id} later`}
+                data-testid={`button-order-down-${id}`}
+              >
+                ▼
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {message ? (
+        <div className="border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent" data-testid="ffstudio-message">
+          {message}
+        </div>
+      ) : null}
     </div>
   );
 }

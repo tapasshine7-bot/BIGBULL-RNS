@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { Atom, Check, Download, LoaderCircle, Megaphone, Smartphone } from 'lucide-react';
+import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, Smartphone } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
+import { getAnnouncements, getStatusHistory, type Announcement } from '@/lib/ff-api';
 
 function RestoreKeyPanel({ status, error, value, onChange, onClose, onConfirm }: {
   status: null | 'loading' | 'ok' | 'err';
@@ -80,8 +81,14 @@ export function GatewayPage() {
   const gateway = query.data;
   const bioTool = gateway?.tools.find((tool) => tool.id === 'bio');
   const liveTools = useMemo(
-    () => liveStatusQuery.data?.statuses.filter((tool) => tool.id !== 'bio').slice(0, 4) ?? [],
-    [liveStatusQuery.data?.statuses],
+    () =>
+      (liveStatusQuery.data?.statuses.filter((tool) => tool.id !== 'bio').slice(0, 4) ?? []).map(
+        (tool) => ({
+          ...tool,
+          name: gateway?.tools.find((entry: { id: string; name?: string }) => entry.id === tool.id)?.name ?? tool.id,
+        }),
+      ),
+    [liveStatusQuery.data?.statuses, gateway?.tools],
   );
   const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
@@ -149,10 +156,30 @@ export function GatewayPage() {
     return locked ? (maintenance?.scope === 'both' ? 'WHOLE SITE' : maintenance?.scope === 'bio' ? 'BIO TOOL' : 'VIP HUB') : null;
   }
 
-  if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />; // install hooks must come before early returns
-  if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
+  // Announcement feed — loads regardless of gateway state, so its hooks sit before any early return.
+  const [announcementOpen, setAnnouncementOpen] = useState<Announcement | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [historyTool, setHistoryTool] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAnnouncements()
+      .then((list) => {
+        if (cancelled) return;
+        setAnnouncements(list);
+      })
+      .catch(() => {
+        /* cosmetic — fail silently */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
+
+  if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />;
+  if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
 
   async function handleRestore() {
     const key = restoreKey.trim();
@@ -310,7 +337,7 @@ export function GatewayPage() {
       <article className="dashboard-panel">
         <div className="dashboard-panel-heading"><div><div className="dashboard-section-label">Live tools status</div><h2>Live tools</h2></div><div className="dashboard-online-count"><span /> {onlineTools} online</div></div>
         <div className="live-tool-grid">
-          {liveTools.length === 0 ? <div className="py-5 text-xs text-muted-foreground">Checking partner tools…</div> : liveTools.map((tool) => <a key={tool.id} href={tool.url} target="_blank" rel="noreferrer" className="live-tool-item" data-testid={`dashboard-live-${tool.id}`}><span>{tool.name}</span><StatusPill status={tool.status} /></a>)}
+          {liveTools.length === 0 ? <div className="py-5 text-xs text-muted-foreground">Checking partner tools…</div> : liveTools.map((tool) => <a key={tool.id} href={tool.url} target="_blank" rel="noreferrer" className="live-tool-item" data-testid={`dashboard-live-${tool.id}`}><span>{tool.name}</span><span data-history aria-label={`Show ${tool.name} status history`} className="inline-grid shrink-0 place-items-center border border-border bg-background/70 px-1.5 py-0.5 text-muted-foreground transition hover:border-accent/50 hover:text-accent" onClick={(event) => { event.preventDefault(); event.stopPropagation(); setHistoryTool(tool.id); }}><History size={10} /></span><StatusPill status={tool.status} /></a>)}
         </div>
         <div className="dashboard-panel-footer"><Check size={13} /> {liveStatusQuery.data ? `Checked ${formatClock(liveStatusQuery.data.checkedAt)}` : 'Checking live availability'}</div>
         <div className="mt-3 border-t border-border pt-3">
@@ -325,9 +352,115 @@ export function GatewayPage() {
           {gateway.recentActivity.length === 0 && <div className="py-5 text-xs text-muted-foreground">Your account events will appear here.</div>}
         </div>
       </article>
+
+      {/* Site announcements — real, admin-managed */}
+      <article className="dashboard-panel">
+        <div className="dashboard-panel-heading"><div><div className="dashboard-section-label">From the owner</div><h2>Announcements</h2></div><div className="text-mono text-[9px] uppercase tracking-[.18em] text-muted-foreground">{announcements.length} posts</div></div>
+        <div className="space-y-2">
+          {announcements.length === 0 ? (
+            <div className="py-5 text-center text-xs text-muted-foreground">Nothing announced yet — official posts will appear here.</div>
+          ) : (
+            announcements.slice(0, 4).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setAnnouncementOpen(item)}
+                className="flex w-full items-start gap-2.5 border border-border bg-card/60 p-3 text-left transition hover:border-accent/50"
+                data-testid={`button-announcement-${item.id}`}
+              >
+                <Bell size={12} className="mt-0.5 shrink-0 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold">{item.title}</div>
+                  {item.body ? <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-muted-foreground">{item.body}</div> : null}
+                </div>
+                <ChevronRight size={12} className="mt-0.5 shrink-0 text-muted-foreground" />
+              </button>
+            ))
+          )}
+        </div>
+      </article>
     </section>
 
+    {announcementOpen ? <AnnouncementModal item={announcementOpen} onClose={() => setAnnouncementOpen(null)} /> : null}
+    {historyTool ? <StatusHistoryModal toolId={historyTool} toolName={gateway?.tools.find((item: { id?: string; name?: string }) => item.id === historyTool)?.name ?? historyTool} onClose={() => setHistoryTool(null)} /> : null}
   </div>;
+}
+
+/** Announcement popup — mirrors the banner modal style so mobile feels familiar. */
+function AnnouncementModal({ item, onClose }: { item: Announcement; onClose: () => void }) {
+  const endsAt = item.ends_at
+    ? (() => {
+        const d = new Date(item.ends_at);
+        return Number.isNaN(d.valueOf()) ? null : new Intl.DateTimeFormat('en', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d);
+      })()
+    : null;
+  return (
+    <div className="banner-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" data-testid="announcement-popup">
+      <div className="banner-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-mono text-[10px] uppercase tracking-[.2em] text-accent">Announcement</div>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close" data-testid="button-close-announcement">✕</button>
+        </div>
+        <h3 className="mt-2 text-base font-bold">{item.title}</h3>
+        {item.body ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground">{item.body}</p> : null}
+        {endsAt ? <div className="mt-3 text-mono text-[9px] uppercase tracking-[.18em] text-muted-foreground">Pinned until {endsAt}</div> : null}
+        <button type="button" onClick={onClose} className="mt-4 self-end border border-accent/50 bg-accent/10 px-4 py-1.5 text-mono text-[9px] uppercase tracking-[.16em] text-accent hover:bg-accent/20" data-testid="button-close-announcement-ok">Got it</button>
+      </div>
+    </div>
+  );
+}
+
+/** Live-status history popup — real probe history from the database (12 hours). */
+function StatusHistoryModal({ toolId, toolName, onClose }: { toolId: string; toolName: string; onClose: () => void }) {
+  const [points, setPoints] = useState<Array<{ ts: string; status: string; latencyMs: number | null }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getStatusHistory(toolId, 12)
+      .then((data) => {
+        if (cancelled) return;
+        setPoints(data.points ?? []);
+      })
+      .catch(() => {
+        /* fail silently — cosmetic */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [toolId]);
+
+  return (
+    <div className="banner-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" data-testid="status-history-popup">
+      <div className="banner-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-mono text-[10px] uppercase tracking-[.2em] text-accent">{toolName} / status history</div>
+          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Close" data-testid="button-close-history">✕</button>
+        </div>
+        {loading ? (
+          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle size={13} className="spin-slow" /> Pulling history…</div>
+        ) : points.length === 0 ? (
+          <p className="mt-4 text-xs leading-6 text-muted-foreground">No history recorded yet — probe data builds up as visitors use the site. Check back in a little while.</p>
+        ) : (
+          <div className="mt-4 space-y-1.5">
+            {points.slice(-24).reverse().map((point, index) => (
+              <div key={index} className="flex items-center gap-2 border border-border bg-card/60 px-2.5 py-1.5">
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${point.status === 'online' ? 'bg-emerald-400' : point.status === 'warning' ? 'bg-amber-400' : 'bg-red-400'}`} aria-hidden="true" />
+                <span className="text-mono text-[9px] uppercase tracking-[.14em] text-muted-foreground">{formatClock(point.ts)}</span>
+                <span className="text-xs">{point.status}</span>
+                {typeof point.latencyMs === 'number' ? <span className="ml-auto text-mono text-[9px] text-muted-foreground">{point.latencyMs} ms</span> : null}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 flex items-center gap-2 text-mono text-[8px] uppercase tracking-[.16em] text-muted-foreground"><Activity size={11} /> Real probe records from the last 12 hours</div>
+      </div>
+    </div>
+  );
 }
 
 /** One-line install row: native button when available, else a copy-the-steps card. */

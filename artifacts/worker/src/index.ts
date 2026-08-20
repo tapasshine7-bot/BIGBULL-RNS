@@ -2,6 +2,7 @@
 // Public endpoints are open (no payment system). Admin endpoints live under /api/admin.
 
 import { handleAdmin, handleBanner } from "./admin";
+import { handleFfTools, recordStatusHistory } from "./fftools";
 
 export interface Env {
   db: D1Database;
@@ -158,7 +159,7 @@ async function probeTool(tool: ToolRow): Promise<ToolStatus> {
   } catch {
     /* keep offline */
   }
-  return { id: tool.id, status: lastStatus ?? "offline", latencyMs: null, checkedAt };
+  return { id: tool.id, status: (lastStatus ?? "offline") as ToolStatus["status"], latencyMs: null, checkedAt };
 }
 
 async function probeAll(tools: ToolRow[]): Promise<{ checkedAt: string; statuses: ToolStatus[] }> {
@@ -241,7 +242,14 @@ async function handleBio(db: D1Database, request: Request): Promise<Response> {
 async function handleLiveStatus(db: D1Database, request: Request): Promise<Response> {
   await recordPublicVisit(db, "/live", request);
   const tools = await listTools(db);
-  return jsonResponse(200, await probeAll(tools));
+  const health = await probeAll(tools);
+  try {
+    await recordStatusHistory(db, health.statuses);
+  } catch (err) {
+    // History recording must never break the live-status response — log and continue.
+    console.error("[history] record failed", (err as { message?: string })?.message ?? String(err));
+  }
+  return jsonResponse(200, health);
 }
 
 async function handleActivity(db: D1Database): Promise<Response> {
@@ -411,6 +419,10 @@ export default {
       if (path === "/vip-pay") return corsResponse(await handleVipPay(env.db, request), request);
       if (path === "/vip-pay-config") return corsResponse(await handleVipPayConfig(env.db), request);
       if (path === "/visitor-stats") return corsResponse(await handleVisitorStats(env.db), request);
+      {
+        const ff = await handleFfTools(env.db, request, path);
+        if (ff) return corsResponse(ff, request);
+      }
       if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
       if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });

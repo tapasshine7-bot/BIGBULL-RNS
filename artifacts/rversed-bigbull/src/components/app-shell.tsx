@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download } from 'lucide-react';
+import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download, SlidersHorizontal, Crosshair, Fingerprint, Newspaper } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { BrandMark } from '@/components/brand-mark';
 
@@ -9,6 +9,13 @@ const nav = [
   { href: '/bio', label: 'Bio Tool', icon: Boxes },
   { href: '/vip', label: 'VIP Hub', icon: Sparkles },
   { href: '/activity', label: 'Activity', icon: History },
+];
+
+const ffNav = [
+  { href: '/sensitivity', label: 'FF Sensitivity', icon: SlidersHorizontal },
+  { href: '/headshot', label: 'Headshot %', icon: Crosshair },
+  { href: '/uid', label: 'UID Lookup', icon: Fingerprint },
+  { href: '/news', label: 'FF News', icon: Newspaper },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -21,6 +28,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="text-mono mt-12 px-3 text-[9px] uppercase tracking-[.28em] text-muted-foreground">Control surfaces</div>
         <nav className="mt-4 space-y-1" aria-label="Main navigation">
           {nav.map(({ href, label, icon: Icon }) => {
+            const active = location === href;
+            return <Link key={href} href={href} data-testid={`link-${label.toLowerCase().replace(' ', '-')}`} className={`group flex items-center justify-between border px-3 py-3 text-sm transition ${active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-transparent text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground'}`}>
+              <span className="flex items-center gap-3"><Icon size={16} strokeWidth={1.7} /><span>{label}</span></span>
+              <ChevronRight size={14} className={active ? 'opacity-100' : 'opacity-0 transition group-hover:opacity-100'} />
+            </Link>;
+          })}
+        </nav>
+        <div className="text-mono mt-7 px-3 text-[9px] uppercase tracking-[.28em] text-muted-foreground">Free Fire tools</div>
+        <nav className="mt-4 space-y-1" aria-label="Free Fire utilities">
+          {ffNav.map(({ href, label, icon: Icon }) => {
             const active = location === href;
             return <Link key={href} href={href} data-testid={`link-${label.toLowerCase().replace(' ', '-')}`} className={`group flex items-center justify-between border px-3 py-3 text-sm transition ${active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-transparent text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-foreground'}`}>
               <span className="flex items-center gap-3"><Icon size={16} strokeWidth={1.7} /><span>{label}</span></span>

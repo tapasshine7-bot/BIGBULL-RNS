@@ -12,6 +12,10 @@ import { BioPage } from '@/pages/bio-page';
 import { ActivityPage } from '@/pages/activity-page';
 import { SupportPage } from '@/pages/support-page';
 import { PoliciesPage } from '@/pages/policies-page';
+import { SensitivityPage } from '@/pages/sensitivity-page';
+import { HeadshotPage } from '@/pages/headshot-page';
+import { UidPage } from '@/pages/uid-page';
+import { NewsPage } from '@/pages/news-page';
 import { ControlPage } from '@/pages/control-page';
 import { MemberPage } from '@/pages/member-page';
 import {
@@ -36,6 +40,10 @@ function Router() {
         <Route path="/activity"><AppShell><ActivityPage /></AppShell></Route>
         <Route path="/support"><AppShell><SupportPage /></AppShell></Route>
         <Route path="/policies"><AppShell><PoliciesPage /></AppShell></Route>
+        <Route path="/sensitivity"><AppShell><SensitivityPage /></AppShell></Route>
+        <Route path="/headshot"><AppShell><HeadshotPage /></AppShell></Route>
+        <Route path="/uid"><AppShell><UidPage /></AppShell></Route>
+        <Route path="/news"><AppShell><NewsPage /></AppShell></Route>
         <Route path="/member" component={MemberPage} />
         <Route path="/control" component={ControlPage} />
         <Route component={NotFound} />
