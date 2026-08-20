@@ -1,10 +1,10 @@
-import { Crosshair } from 'lucide-react';
+
 
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3" data-testid="brand-mark">
-      <div className="relative grid h-10 w-10 place-items-center border border-primary/50 bg-primary/10 text-primary">
-        <Crosshair size={22} strokeWidth={1.6} />
+      <div className="relative grid h-10 w-10 place-items-center overflow-hidden rounded-lg border border-primary/50 bg-primary/10">
+        <img src="/rversal-logo.png" alt="RVRSED eagle emblem" className="h-9 w-9 object-cover" />
         <span className="absolute -right-1 -top-1 h-2 w-2 bg-primary" />
       </div>
       {!compact && (

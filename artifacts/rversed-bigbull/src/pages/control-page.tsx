@@ -167,7 +167,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, mu, fa] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, fa] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),

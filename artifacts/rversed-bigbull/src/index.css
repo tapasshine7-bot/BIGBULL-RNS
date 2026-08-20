@@ -455,24 +455,15 @@
   background-image: linear-gradient(rgba(145,160,190,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(145,160,190,.055) 1px, transparent 1px);
   background-size: 34px 34px;
 }
-.noise-surface {
-  position: relative;
-  isolation: isolate;
-  background:
-    radial-gradient(ellipse at 68% 6%, rgba(38, 54, 82, .16), transparent 38%),
-    radial-gradient(ellipse at 18% 88%, rgba(12, 75, 81, .12), transparent 30%),
-    linear-gradient(135deg, #060a11 0%, #080d16 50%, #05080e 100%);
-}
 .noise-surface::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  opacity: .54;
-  background-image:
-    linear-gradient(rgba(126, 151, 185, .045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(126, 151, 185, .045) 1px, transparent 1px);
+  background:
+    linear-gradient(rgba(126, 151, 185, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 151, 185, .05) 1px, transparent 1px);
   background-size: 42px 42px;
   mask-image: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, .75) 70%, transparent 100%);
 }
@@ -481,9 +472,14 @@
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: .035;
-  z-index: 40;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  z-index: -3;
+  background-color: #060a14;
+  background-image: url('/bg-eagle.jpg');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  filter: brightness(.5) saturate(1.05);
 }
 .panel-edge { box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 18px 45px rgba(0,0,0,.24); }
 .text-display { font-family: var(--app-font-serif); letter-spacing: .025em; }
@@ -534,6 +530,16 @@
 .dashboard-bio-card:hover { box-shadow: inset 0 1px 0 rgba(124, 92, 252, .35), 0 18px 44px rgba(80, 50, 180, .45); transform: translateY(-3px); }
 .dashboard-vip-card { border-color: rgba(255, 176, 32, .85); background: linear-gradient(105deg, rgba(64, 48, 12, .8), rgba(24, 24, 36, .75)); box-shadow: inset 0 1px 0 rgba(255, 176, 32, .28), 0 14px 34px rgba(120, 80, 10, .3); transition: box-shadow .25s ease, transform .25s ease; }
 .dashboard-vip-card:hover { box-shadow: inset 0 1px 0 rgba(255, 176, 32, .45), 0 18px 44px rgba(160, 110, 20, .42); transform: translateY(-3px); }
+.dashboard-admin-card { border-color: rgba(255, 122, 122, .75); background: linear-gradient(105deg, rgba(66, 22, 22, .78), rgba(22, 18, 36, .78)); box-shadow: inset 0 1px 0 rgba(255, 122, 122, .26), 0 14px 34px rgba(130, 40, 40, .3); transition: box-shadow .25s ease, transform .25s ease; }
+.dashboard-admin-card:hover { box-shadow: inset 0 1px 0 rgba(255, 122, 122, .42), 0 18px 44px rgba(180, 60, 60, .42); transform: translateY(-3px); }
+.dashboard-admin-card .dashboard-card-title-row h2 { background: linear-gradient(90deg, #ff9a9a, #ff5c5c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.dashboard-admin-art { color: rgba(255, 122, 122, .65); filter: drop-shadow(0 0 18px rgba(255, 92, 92, .35)); display: flex; align-items: center; }
+.dashboard-action-admin { color: #1f0404; background: linear-gradient(90deg, #ff8a8a, #e84242); border-radius: 8px; }
+.dashboard-free-tag-red { color: #ff9b9b; background: rgba(255, 122, 122, .12); border: 1px solid rgba(255, 122, 122, .4); }
+.admin-card-row { display: flex; align-items: stretch; gap: .5rem; }
+.admin-card-input { flex: 1; min-width: 0; height: 34px; padding: 0 .7rem; font-size: .7rem; border-radius: 8px; border: 1px solid rgba(255, 122, 122, .45); background: rgba(255, 122, 122, .07); color: var(--foreground); }
+.admin-card-input::placeholder { color: rgba(255, 155, 155, .55); }
+.admin-card-input:focus { outline: 2px solid rgba(255, 122, 122, .55); outline-offset: -2px; }
 .dashboard-card-copy > p { color: rgba(237, 239, 247, .78); }
 .dashboard-card-copy { position: relative; z-index: 1; max-width: 68%; }
 .dashboard-card-title-row { display: flex; align-items: center; gap: .6rem; }

@@ -1,9 +1,82 @@
 import { useMemo } from 'react';
-import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, Smartphone } from 'lucide-react';
+import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, ShieldCheck, Smartphone } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
+import { readAdminToken } from '@/lib/admin';
 import { getAnnouncements, getStatusHistory, type Announcement } from '@/lib/ff-api';
+
+/**
+ * Admin card on the dashboard — owner-only.
+ * Already signed in → one tap opens /control.
+ * Not signed in → small inline password prompt (password never leaves this device).
+ */
+function AdminCard() {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const token = readAdminToken();
+
+  async function onSubmit() {
+    if (!pw) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const result = await adminLogin({ password: pw });
+      if (result?.ok && result.token) {
+        setAdminToken(result.token);
+        window.location.href = '/control';
+      } else {
+        setErr(result?.error === 'not-found' ? 'Wrong password — access is owner-only.' : 'Login failed. Try again.');
+      }
+    } catch {
+      setErr('Network error — check your connection and retry.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const cardClasses = 'dashboard-feature-card dashboard-admin-card';
+  const actionClasses = 'dashboard-action dashboard-action-admin';
+
+  return (
+    <article className={cardClasses} data-testid="dashboard-admin-card" aria-label="Admin control">
+      <div className="dashboard-card-copy">
+        <div className="dashboard-card-title-row"><h2>Admin</h2><span className="dashboard-free-tag dashboard-free-tag-red">OWNER ONLY</span></div>
+        <p>Hidden control console — site ops, VIP keys and live tools.</p>
+        {token ? (
+          <Link href="/control" className={actionClasses} data-testid="button-dashboard-admin"><span>Open Control Panel</span><span aria-hidden="true">→</span></Link>
+        ) : (
+          <div>
+            <div className="admin-card-row" data-testid="admin-password-row">
+              <input
+                type="password"
+                placeholder="Owner password"
+                autoComplete="current-password"
+                value={pw}
+                onChange={(event) => { setPw(event.target.value); setErr(''); }}
+                onKeyDown={(event) => { if (event.key === 'Enter') onSubmit(); }}
+                className="admin-card-input"
+                data-testid="input-admin-card-password"
+              />
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={busy || !pw}
+                className={actionClasses}
+                data-testid="button-admin-card-signin"
+              >
+                {busy ? <span className="inline-flex items-center gap-1.5"><LoaderCircle size={13} className="spin-slow" /> …</span> : <span>Enter</span>}
+              </button>
+            </div>
+            {err ? <div className="mt-1.5 text-[11px] leading-4 text-red-400" data-testid="text-admin-card-error">{err}</div> : null}
+          </div>
+        )}
+      </div>
+      <div className="dashboard-card-art dashboard-admin-art" aria-hidden="true"><ShieldCheck size={84} strokeWidth={1} /></div>
+    </article>
+  );
+}
 
 function RestoreKeyPanel({ status, error, value, onChange, onClose, onConfirm }: {
   status: null | 'loading' | 'ok' | 'err';
@@ -57,7 +130,7 @@ function RestoreKeyPanel({ status, error, value, onChange, onClose, onConfirm }:
   );
 }
 import { useEffect, useState } from 'react';
-import { fetchBannerState, getVisitorStats, vipRegister } from '@/lib/admin';
+import { adminLogin, fetchBannerState, getVisitorStats, setAdminToken, vipRegister } from '@/lib/admin';
 import { Lock } from 'lucide-react';
 import type { AdminMaintenance } from '@/lib/admin';
 import { QueryError, QueryLoading } from '@/components/page-kit';
@@ -302,6 +375,8 @@ export function GatewayPage() {
           <div className="dashboard-card-art dashboard-vip-art" aria-hidden="true"><span>♛</span></div>
         </article>
       </LockedCardWrap>
+
+      <AdminCard />
 
       {/* Emergency key restore — directly below the VIP Hub dashboard card */}
       {/* (grid-column: 1/-1 spans under both cards) */}
