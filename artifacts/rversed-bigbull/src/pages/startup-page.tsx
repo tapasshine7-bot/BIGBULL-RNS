@@ -178,6 +178,18 @@ export function StartupPage() {
   // Entry splash: 3D particle field + engine boot, with a manual "ENTER GATEWAY" button.
   // Shown once per browser session (sessionStorage) — first-time visitors get the animation,
   // returning tabs skip straight to the auto-boot terminal.
+  // Already saw the entry splash this session: skip straight to the gateway.
+  // (The old "boot protocol" terminal had no way forward and left visitors stuck.)
+  useEffect(() => {
+    if (entry.done) {
+      const timer = window.setTimeout(() => setLocation('/gateway'), 300);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [entry.done, setLocation]);
+
+  if (entry.done) return null;
+
   if (!entry.done) {
     return (
       <div className="relative min-h-[100dvh] overflow-hidden bg-[#0b0e15] text-foreground">

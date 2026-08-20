@@ -288,7 +288,7 @@ export function GatewayPage() {
     }
   }
 
-  return <div className="route-in dashboard-page"><BackButton />
+  return <div className="route-in dashboard-page">
     {(banner || maintenanceBanner) ? (
       <button
         type="button"
