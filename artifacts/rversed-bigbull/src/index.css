@@ -1450,3 +1450,32 @@ html.vip-dark-mode body {
   .tear-panel-left { transform: translateX(-53%) !important; }
   .tear-panel-right { transform: translateX(53%) !important; }
 }
+
+/* ===== Round 16 v3: upgraded full-screen glowing terminal startup ===== */
+.entrance-stage { background: #060a14; }
+
+.entrance-title-red {
+  color: #e22b24;
+  text-shadow:
+    0 0 18px rgba(226, 43, 36, .55),
+    0 0 48px rgba(226, 43, 36, .35),
+    0 0 90px rgba(226, 43, 36, .2);
+  animation: entrance-glow 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes entrance-glow {
+  from { text-shadow: 0 0 18px rgba(226, 43, 36, .55), 0 0 48px rgba(226, 43, 36, .35), 0 0 90px rgba(226, 43, 36, .2); }
+  to { text-shadow: 0 0 26px rgba(226, 43, 36, .85), 0 0 64px rgba(226, 43, 36, .5), 0 0 120px rgba(226, 43, 36, .3); }
+}
+
+.boot-panel { animation: boot-panel-appear .6s ease-out; }
+@keyframes boot-panel-appear {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.entrance-title { animation: entrance-title-in .7s ease-out; }
+@keyframes entrance-title-in {
+  from { opacity: 0; transform: translateY(-18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
