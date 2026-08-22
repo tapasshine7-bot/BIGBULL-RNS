@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, ShieldCheck, Smartphone } from 'lucide-react';
+import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, ShieldCheck, Smartphone, Wrench } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
@@ -159,6 +159,10 @@ export function GatewayPage() {
   const gatewayTools = Array.isArray(gateway?.tools) ? gateway.tools : [];
   const liveStatuses = Array.isArray(liveStatusQuery.data?.statuses) ? liveStatusQuery.data.statuses : [];
   const bioTool = gatewayTools.find((tool) => tool.id === 'bio');
+  const managedDashboardTools = gatewayTools.filter((tool) => {
+    const managed = tool as unknown as { id: string; placement?: string; enabled?: boolean };
+    return managed.id !== 'bio' && managed.placement === 'dashboard' && managed.enabled !== false;
+  }) as Array<{ id: string; name: string; description?: string; url: string; logoUrl?: string | null }>;
   const liveTools = useMemo(
     () =>
       liveStatuses.filter((tool) => tool.id !== 'bio').slice(0, 4).map(
@@ -260,7 +264,7 @@ export function GatewayPage() {
   const stillConnecting = !liveStatusQuery.data && liveStatusQuery.isFetching;
 
   if (query.isLoading) return <QueryLoading label="OPENING PLAYER GATEWAY" />;
-  if (query.isError || !gateway || !bioTool) return <QueryError onRetry={() => query.refetch()} />;
+  if (query.isError || !gateway || !gateway.user) return <QueryError onRetry={() => query.refetch()} />;
 
   async function handleRestore() {
     const key = restoreKey.trim();
@@ -340,7 +344,7 @@ export function GatewayPage() {
           compact
         />
       ) : null}
-      <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)} isUpdate={isUpdateMode}>
+      {bioTool ? <LockedCardWrap locked={bioLocked} scopeLabel={lockLabel(bioLocked)} isUpdate={isUpdateMode}>
         <article className="dashboard-feature-card dashboard-bio-card">
           <div className="dashboard-card-copy">
             <div className="dashboard-card-title-row"><h2>Bio Tool</h2><span className="dashboard-free-tag">FREE</span></div>
@@ -353,7 +357,7 @@ export function GatewayPage() {
           </div>
           <div className="dashboard-card-art dashboard-bio-art" aria-hidden="true"><Atom size={92} strokeWidth={1} /></div>
         </article>
-      </LockedCardWrap>
+      </LockedCardWrap> : null}
 
       {/* Scoped caution banner — sits above the VIP Hub card when only VIP Hub is locked */}
       {maintenance?.enabled && maintenance.scope === 'vip' && maintenance.message ? (
@@ -382,6 +386,19 @@ export function GatewayPage() {
       </LockedCardWrap>
 
       <AdminCard />
+
+      {managedDashboardTools.map((tool) => (
+        <article key={tool.id} className="dashboard-feature-card dashboard-managed-card" data-testid={`dashboard-managed-${tool.id}`}>
+          <div className="dashboard-card-copy">
+            <div className="dashboard-card-title-row"><h2>{tool.name}</h2><span className="dashboard-free-tag">TOOL</span></div>
+            <p>{tool.description || 'Owner-approved tool available from RNS BIGBULL.'}</p>
+            <a href={tool.url} target="_blank" rel="noopener noreferrer" className="dashboard-action dashboard-action-purple"><span>Open {tool.name}</span><span aria-hidden="true">→</span></a>
+          </div>
+          <div className="dashboard-card-art dashboard-managed-art" aria-hidden="true">
+            {tool.logoUrl ? <img src={tool.logoUrl} alt="" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : <Wrench size={72} strokeWidth={1} />}
+          </div>
+        </article>
+      ))}
 
       {/* Emergency key restore — directly below the VIP Hub dashboard card */}
       {/* (grid-column: 1/-1 spans under both cards) */}

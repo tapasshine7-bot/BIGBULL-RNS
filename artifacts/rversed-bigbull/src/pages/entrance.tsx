@@ -49,10 +49,11 @@ function useSessionFlag(key: string) {
 function ParticleField() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
-    const canvas = canvasRef.current as HTMLCanvasElement | null;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const currentCanvas = canvasRef.current;
+    const currentContext = currentCanvas?.getContext("2d");
+    if (!currentCanvas || !currentContext) return () => {};
+    const canvas: HTMLCanvasElement = currentCanvas;
+    const ctx: CanvasRenderingContext2D = currentContext;
     let cancelled = false;
     let width = 0;
     let height = 0;
@@ -166,12 +167,13 @@ export function Entrance() {
       goGateway(true);
       return clearTimers;
     }
+    return () => {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fast boot: one line every ~520ms (total ~3.1s), then auto-open gateway quickly.
   useEffect(() => {
-    if (entryDone) return;
+    if (entryDone) return () => {};
     const step = window.setInterval(() => {
       setStage((current) => {
         if (current >= BOOT_LINES.length - 1) {

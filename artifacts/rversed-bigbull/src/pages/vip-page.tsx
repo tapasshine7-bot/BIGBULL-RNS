@@ -425,7 +425,7 @@ function GuideCardsSection() {
 }
 
 // Rich partner tool card: brand icon, name badge, description, status and launch.
-function PartnerCard({ tool, index }: { tool: { id: string; name: string; description: string; url: string; category: string; status: string; isFree?: boolean }; index: number }) {
+function PartnerCard({ tool, index }: { tool: { id: string; name: string; description: string; url: string; category: string; status: string; logoUrl?: string | null; isFree?: boolean }; index: number }) {
   const meta = TOOL_META[tool.id] ?? TOOL_META['default'];
   const Icon = meta.icon;
   return (
@@ -434,7 +434,7 @@ function PartnerCard({ tool, index }: { tool: { id: string; name: string; descri
       <div className="relative flex h-full flex-col">
         <div className="flex items-start justify-between">
           <div className={`partner-icon partner-icon-${meta.accent}`}>
-            <Icon size={22} strokeWidth={1.6} />
+            {tool.logoUrl ? <img src={tool.logoUrl} alt="" className="h-7 w-7 rounded object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : <Icon size={22} strokeWidth={1.6} />}
           </div>
           <StatusPill status={tool.status as 'online' | 'checking' | 'warning' | 'offline'} />
         </div>

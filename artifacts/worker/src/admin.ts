@@ -3,6 +3,7 @@
 // Public mirror: GET /api/banner — returns active banner + maintenance state.
 
 import { generateMemberKey } from "./index";
+import { TOOL_MANAGER_SCHEMA, type ManagedToolRow, safeToolId, toPublicTool, validateToolInput } from "./tool-manager";
 
 
 export interface AdminContext {
@@ -143,6 +144,7 @@ const ADMIN_SCHEMA = [
      region TEXT NOT NULL DEFAULT 'IND',
      created_at TEXT NOT NULL
    )`,
+  TOOL_MANAGER_SCHEMA,
 ];
 
 async function ensureSchema(db: D1Database): Promise<void> {
@@ -621,6 +623,75 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       if (stmts.length > 0) await db.batch(stmts);
       await audit(db, "Tapas123", "tool_order.update", "tool_ordering", { updated: stmts.length }, "info").catch(() => {});
       return safeJson(200, { ok: true, updated: stmts.length }, request);
+    }
+
+    // Owner-managed public tools. Links are entered by the owner only; the
+    // server still validates HTTPS, logo URLs, placement, and the blocked-host list.
+    if (path === "/tools" && request.method === "GET") {
+      const rows = await db
+        .prepare("SELECT id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at FROM managed_tools ORDER BY placement, position, name")
+        .all<ManagedToolRow>();
+      return safeJson(200, { tools: (rows.results ?? []).map((row) => ({ ...toPublicTool(row), enabled: row.enabled === 1, position: row.position, createdAt: row.created_at, updatedAt: row.updated_at })) }, request);
+    }
+    if (path === "/tools" && request.method === "POST") {
+      const body = await request.json().catch(() => null);
+      const parsed = validateToolInput(body);
+      if (!parsed.input) return safeJson(400, { ok: false, error: parsed.error ?? "Invalid tool" }, request);
+      const requestedId = safeToolId((body as { id?: unknown } | null)?.id);
+      const random = crypto.randomUUID().slice(0, 8);
+      const id = requestedId || `tool-${random}`;
+      const existing = await db.prepare("SELECT id FROM managed_tools WHERE id = ?").bind(id).first();
+      if (existing) return safeJson(409, { ok: false, error: "A tool with this ID already exists" }, request);
+      const now = new Date().toISOString();
+      const last = await db.prepare("SELECT MAX(position) AS last_position FROM managed_tools WHERE placement = ?").bind(parsed.input.placement).first<{ last_position: number | null }>();
+      const position = Math.min(100000, Number(last?.last_position ?? 0) + 10);
+      await db
+        .prepare("INSERT INTO managed_tools (id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, parsed.input.name, parsed.input.url, parsed.input.logoUrl, parsed.input.description, parsed.input.placement, parsed.input.enabled ? 1 : 0, position, now, now)
+        .run();
+      const row = await db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at FROM managed_tools WHERE id = ?").bind(id).first<ManagedToolRow>();
+      await audit(db, "Tapas123", "tool.create", "managed_tools", { id, placement: parsed.input.placement }, "info").catch(() => {});
+      return safeJson(201, { ok: true, tool: row ? { ...toPublicTool(row), enabled: row.enabled === 1, position: row.position } : null }, request);
+    }
+    if (path === "/tools/reorder" && request.method === "POST") {
+      const body = await request.json().catch(() => null) as { tools?: Array<{ id?: unknown; position?: unknown }> } | null;
+      const entries = Array.isArray(body?.tools) ? body!.tools : [];
+      const now = new Date().toISOString();
+      const statements: D1PreparedStatement[] = [];
+      for (const entry of entries.slice(0, 100)) {
+        const id = safeToolId(entry?.id);
+        const position = Math.max(0, Math.min(100000, Math.floor(Number(entry?.position))));
+        if (!id || !Number.isFinite(position)) continue;
+        statements.push(db.prepare("UPDATE managed_tools SET position = ?, updated_at = ? WHERE id = ?").bind(position, now, id));
+      }
+      if (statements.length) await db.batch(statements);
+      await audit(db, "Tapas123", "tool.reorder", "managed_tools", { count: statements.length }, "info").catch(() => {});
+      return safeJson(200, { ok: true, updated: statements.length }, request);
+    }
+    const toolIdMatch = path.match(/^\/tools\/([a-z0-9-]{1,64})$/);
+    if (toolIdMatch && request.method === "POST") {
+      const id = safeToolId(toolIdMatch[1]);
+      const current = await db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at FROM managed_tools WHERE id = ?").bind(id).first<ManagedToolRow>();
+      if (!current) return safeJson(404, { ok: false, error: "Tool not found" }, request);
+      const body = await request.json().catch(() => null);
+      const parsed = validateToolInput(body, { name: current.name, url: current.url, logoUrl: current.logo_url, description: current.description, placement: current.placement, enabled: current.enabled === 1 });
+      if (!parsed.input) return safeJson(400, { ok: false, error: parsed.error ?? "Invalid tool" }, request);
+      const now = new Date().toISOString();
+      await db
+        .prepare("UPDATE managed_tools SET name = ?, url = ?, logo_url = ?, description = ?, placement = ?, enabled = ?, updated_at = ? WHERE id = ?")
+        .bind(parsed.input.name, parsed.input.url, parsed.input.logoUrl, parsed.input.description, parsed.input.placement, parsed.input.enabled ? 1 : 0, now, id)
+        .run();
+      const row = await db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at FROM managed_tools WHERE id = ?").bind(id).first<ManagedToolRow>();
+      await audit(db, "Tapas123", "tool.update", "managed_tools", { id, placement: parsed.input.placement }, "info").catch(() => {});
+      return safeJson(200, { ok: true, tool: row ? { ...toPublicTool(row), enabled: row.enabled === 1, position: row.position } : null }, request);
+    }
+    if (toolIdMatch && request.method === "DELETE") {
+      const id = safeToolId(toolIdMatch[1]);
+      const existing = await db.prepare("SELECT id, name FROM managed_tools WHERE id = ?").bind(id).first<{ id: string; name: string }>();
+      if (!existing) return safeJson(404, { ok: false, error: "Tool not found" }, request);
+      await db.prepare("DELETE FROM managed_tools WHERE id = ?").bind(id).run();
+      await audit(db, "Tapas123", "tool.remove", "managed_tools", { id, name: existing.name }, "warning").catch(() => {});
+      return safeJson(200, { ok: true, deleted: id }, request);
     }
 
     // GET /api/admin/overview

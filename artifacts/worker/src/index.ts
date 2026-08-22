@@ -3,6 +3,7 @@
 
 import { handleAdmin, handleBanner } from "./admin";
 import { handleFfTools, recordStatusHistory } from "./fftools";
+import { TOOL_MANAGER_SCHEMA, toPublicTool, type ToolPlacement } from "./tool-manager";
 
 export interface Env {
   db: D1Database;
@@ -16,6 +17,9 @@ interface ToolRow {
   category: string;
   is_free: number;
   enabled: number;
+  logo_url?: string | null;
+  placement?: ToolPlacement;
+  position?: number;
 }
 
 interface Tool {
@@ -26,6 +30,8 @@ interface Tool {
   status: string;
   category: string;
   isFree: boolean;
+  placement: ToolPlacement;
+  logoUrl: string | null;
 }
 
 const ALLOWED_ORIGINS = ["https://rnsbigbull.site", "https://www.rnsbigbull.site", "https://rnsbigbull-site.pages.dev"];
@@ -72,21 +78,37 @@ async function recordPublicVisit(db: D1Database, path: string, request: Request)
 }
 
 function toolToPublic(tool: ToolRow): Tool {
-  return {
+  return toPublicTool({
     id: tool.id,
     name: tool.name,
     url: tool.url,
+    logo_url: tool.logo_url ?? null,
     description: tool.description,
-    status: "online",
-    category: tool.category,
-    isFree: tool.is_free === 1,
-  };
+    placement: tool.placement ?? "vip",
+    enabled: tool.enabled,
+    position: tool.position ?? 100,
+    created_at: "",
+    updated_at: "",
+  });
 }
 
-async function listTools(db: D1Database, freeOnly = false): Promise<ToolRow[]> {
-  const base = freeOnly
-    ? db.prepare("SELECT * FROM tool_registry WHERE enabled = 1 AND is_free = 1 ORDER BY id")
-    : db.prepare("SELECT * FROM tool_registry WHERE enabled = 1 ORDER BY id");
+async function ensureManagedTools(db: D1Database): Promise<void> {
+  await db.prepare(TOOL_MANAGER_SCHEMA).run();
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO managed_tools (id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at)
+       SELECT id, name, url, NULL, description, CASE WHEN id = 'bio' THEN 'dashboard' ELSE 'vip' END, enabled, 100, datetime('now'), datetime('now')
+       FROM tool_registry`,
+    )
+    .run()
+    .catch(() => {});
+}
+
+async function listTools(db: D1Database, placement?: ToolPlacement): Promise<ToolRow[]> {
+  await ensureManagedTools(db);
+  const base = placement
+    ? db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position FROM managed_tools WHERE enabled = 1 AND placement = ? ORDER BY position, name").bind(placement)
+    : db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position FROM managed_tools WHERE enabled = 1 ORDER BY placement, position, name");
   const { results } = await base.all<ToolRow>();
   return results ?? [];
 }
@@ -99,8 +121,8 @@ async function loadOrdering(db: D1Database): Promise<Map<string, number>> {
 async function reorderTools(db: D1Database, tools: ToolRow[]): Promise<ToolRow[]> {
   const ordering = await loadOrdering(db);
   return [...tools].sort((a, b) => {
-    const pa = ordering.get(a.id) ?? 99;
-    const pb = ordering.get(b.id) ?? 99;
+    const pa = a.position ?? ordering.get(a.id) ?? 99;
+    const pb = b.position ?? ordering.get(b.id) ?? 99;
     return pa - pb || a.id.localeCompare(b.id);
   });
 }
@@ -180,7 +202,7 @@ function publicActivity(limit: number): { id: string; action: string; detail: st
 
 async function handleGateway(db: D1Database, request: Request): Promise<Response> {
   await recordPublicVisit(db, "/gateway", request);
-  const tools = await listTools(db);
+  const tools = await listTools(db, "dashboard");
   const health = await probeAll(tools);
   // Live manual announcements posted from the admin panel.
   let recentActivity: { id: string; action: string; detail: string; createdAt: string }[] = [];
@@ -227,7 +249,7 @@ async function handleVipHub(db: D1Database, request: Request): Promise<Response>
       blockReason = block.reason ?? "Blocked by admin";
     }
   }
-  const tools = await reorderTools(db, await listTools(db));
+  const tools = await reorderTools(db, await listTools(db, "vip"));
   const health = await probeAll(tools);
   const statusById = new Map(health.statuses.map((s) => [s.id, s.status]));
   return jsonResponse(200, {
@@ -246,7 +268,7 @@ async function handleVipHub(db: D1Database, request: Request): Promise<Response>
 
 async function handleBio(db: D1Database, request: Request): Promise<Response> {
   await recordPublicVisit(db, "/bio", request);
-  const tools = await listTools(db, true);
+  const tools = await listTools(db, "dashboard");
   const bio = tools.find((tool) => tool.id === "bio");
   if (!bio) return jsonResponse(500, { error: "Bio tool not configured." });
   return jsonResponse(200, toolToPublic(bio));

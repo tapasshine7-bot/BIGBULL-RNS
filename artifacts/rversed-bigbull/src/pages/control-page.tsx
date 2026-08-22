@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { EmptyState } from '@/components/page-kit';
+import { ToolManagerPanel } from '@/components/tool-manager-panel';
 import {
   adminAnnounceBanner,
   adminClearBanner,
@@ -72,14 +73,16 @@ import {
   adminListUidSeed,
   adminAddUidSeed,
   adminDeleteUidSeed,
+  adminGetManagedTools,
         adminGetFfApiKey,
   adminPostFfApiKey,
   fetchBannerState,
   readAdminToken,
   setAdminToken,
+  type AdminManagedTool,
 } from '@/lib/admin';
 
-type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary' | 'siteops' | 'ffstudio';
+type TabId = 'overview' | 'monitors' | 'incidents' | 'broadcast' | 'notifications' | 'audit' | 'summary' | 'siteops' | 'ffstudio' | 'tools';
 
 const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'overview', label: 'Overview', icon: <Gauge size={13} /> },
@@ -91,6 +94,7 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
   { id: 'summary', label: 'Reports', icon: <Activity size={13} /> },
   { id: 'siteops', label: 'Site Ops', icon: <Boxes size={13} /> },
   { id: 'ffstudio', label: 'FF Studio', icon: <Flame size={13} /> },
+  { id: 'tools', label: 'Tool Manager', icon: <Wrench size={13} /> },
 ];
 
 function formatTime(value: string | null) {
@@ -158,6 +162,7 @@ export function ControlPage() {
   // FF Studio — VIP analytics + gateway announcements
   const [vipAnalytics, setVipAnalytics] = useState<{ totalMembers?: number; vipMembers?: number; pendingPayments?: number; revenueRs?: number } | null>(null);
   const [gatewayAnnouncements, setGatewayAnnouncements] = useState<Array<{ id: number; title: string; body: string | null; audience: string; starts_at: string | null; ends_at: string | null; created_at: string }>>([]);
+  const [managedTools, setManagedTools] = useState<AdminManagedTool[]>([]);
 
   function flash(message: string) {
     setNotice(message);
@@ -167,7 +172,7 @@ export function ControlPage() {
   async function refreshAll() {
     const token = readAdminToken();
     if (!token) return;
-    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, fa] = await Promise.allSettled([
+    const [ov, mo, inc, nt, au, sm, mt, bn, st, an, rq, ord, vp, vc, va, ga, us, fa, tm] = await Promise.allSettled([
       adminGetOverview(),
       adminGetMonitors(),
       adminGetIncidents(),
@@ -186,6 +191,7 @@ export function ControlPage() {
       adminListGatewayAnnouncements(),
       adminListUidSeed(),
       adminGetFfApiKey(),
+      adminGetManagedTools(),
     ]);
     if (ov.status === 'fulfilled' && !('ok' in ov.value && ov.value.ok === false)) setOverview(ov.value as never);
     if (mo.status === 'fulfilled' && Array.isArray(mo.value)) setMonitors(mo.value);
@@ -222,6 +228,10 @@ export function ControlPage() {
     if (ga.status === 'fulfilled' && ga.value && typeof ga.value === 'object') {
       const payload = ga.value as { announcements?: unknown };
       if (Array.isArray(payload.announcements)) setGatewayAnnouncements(payload.announcements as never);
+    }
+    if (tm.status === 'fulfilled' && tm.value && typeof tm.value === 'object' && 'tools' in tm.value) {
+      const tools = (tm.value as { tools?: unknown }).tools;
+      if (Array.isArray(tools)) setManagedTools(tools as AdminManagedTool[]);
     }
   }
 
@@ -720,6 +730,7 @@ export function ControlPage() {
           {tab === 'audit' && <AuditTab audit={audit} search={auditSearch} onSearchChange={setAuditSearch} />}
           {tab === 'summary' && <SummaryTab summary={summary} />}
           {tab === 'ffstudio' && <FfStudioTab vipAnalytics={vipAnalytics} gatewayAnnouncements={gatewayAnnouncements} onRefresh={() => void refreshAll()} />}{' '}
+          {tab === 'tools' && <ToolManagerPanel tools={managedTools} onChanged={refreshAll} onNotice={flash} />}
           {tab === 'siteops' && (
             <SiteOpsTab
               stats={stats}

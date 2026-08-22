@@ -298,6 +298,59 @@ export async function adminResetOrdering() {
   });
 }
 
+export type AdminManagedTool = {
+  id: string;
+  name: string;
+  url: string;
+  logoUrl: string | null;
+  description: string;
+  category: string;
+  placement: 'dashboard' | 'vip';
+  enabled: boolean;
+  position: number;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ManagedToolInput = {
+  id?: string;
+  name: string;
+  url: string;
+  logoUrl: string;
+  description: string;
+  placement: 'dashboard' | 'vip';
+  enabled: boolean;
+};
+
+export async function adminGetManagedTools() {
+  return adminFetch<{ tools?: AdminManagedTool[]; error?: string }>('/tools');
+}
+
+export async function adminCreateManagedTool(input: ManagedToolInput) {
+  return adminFetch<{ ok: boolean; tool?: AdminManagedTool; error?: string }>('/tools', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminUpdateManagedTool(id: string, input: ManagedToolInput) {
+  return adminFetch<{ ok: boolean; tool?: AdminManagedTool; error?: string }>(`/tools/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function adminDeleteManagedTool(id: string) {
+  return adminFetch<{ ok: boolean; deleted?: string; error?: string }>(`/tools/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function adminReorderManagedTools(tools: Array<{ id: string; position: number }>) {
+  return adminFetch<{ ok: boolean; updated?: number; error?: string }>('/tools/reorder', {
+    method: 'POST',
+    body: JSON.stringify({ tools }),
+  });
+}
+
 // Visitor tool-request submission (public, no login)
 export async function submitToolRequest(name: string, detail: string, contact: string) {
   try {
