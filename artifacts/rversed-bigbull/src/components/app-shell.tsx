@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download, SlidersHorizontal, Crosshair, Fingerprint, Newspaper } from 'lucide-react';
+import { Boxes, ChevronRight, History, Headphones, Radio, Scale, Sparkles, Download, SlidersHorizontal, Crosshair, Fingerprint, Newspaper, UserRound } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { BrandMark } from '@/components/brand-mark';
 
@@ -9,6 +9,7 @@ const nav = [
   { href: '/bio', label: 'Bio Tool', icon: Boxes },
   { href: '/vip', label: 'VIP Hub', icon: Sparkles },
   { href: '/activity', label: 'Activity', icon: History },
+  { href: '/player', label: 'My Desk', icon: UserRound },
 ];
 
 const ffNav = [

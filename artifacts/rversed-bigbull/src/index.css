@@ -1479,3 +1479,14 @@ html.vip-dark-mode body {
   from { opacity: 0; transform: translateY(-18px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Player Desk accessibility controls: browser-local and intentionally additive. */
+html.rns-large-text { font-size: 112.5%; }
+html.rns-reduced-motion *,
+html.rns-reduced-motion *::before,
+html.rns-reduced-motion *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: .01ms !important;
+}

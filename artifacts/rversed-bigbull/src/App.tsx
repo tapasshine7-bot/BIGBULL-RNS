@@ -19,6 +19,7 @@ import { UidPage } from '@/pages/uid-page';
 import { NewsPage } from '@/pages/news-page';
 import { ControlPage } from '@/pages/control-page';
 import { MemberPage } from '@/pages/member-page';
+import { PlayerDeskPage } from '@/pages/player-desk-page';
 import {
   Route,
   Switch,
@@ -46,6 +47,7 @@ function Router() {
         <Route path="/headshot"><AppShell><HeadshotPage /></AppShell></Route>
         <Route path="/uid"><AppShell><UidPage /></AppShell></Route>
         <Route path="/news"><AppShell><NewsPage /></AppShell></Route>
+        <Route path="/player"><AppShell><PlayerDeskPage /></AppShell></Route>
         <Route path="/member" component={MemberPage} />
         <Route path="/control" component={ControlPage} />
         <Route component={NotFound} />
