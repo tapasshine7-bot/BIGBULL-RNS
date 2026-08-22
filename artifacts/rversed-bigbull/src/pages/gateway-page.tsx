@@ -153,18 +153,23 @@ export function GatewayPage() {
     },
   });
   const gateway = query.data;
-  const bioTool = gateway?.tools.find((tool) => tool.id === 'bio');
+  // A freshly deployed Worker or an outdated browser cache can briefly return a
+  // partial gateway payload. Normalize those collections before rendering so the
+  // gateway shows its retry state instead of crashing on `.find()` or `.filter()`.
+  const gatewayTools = Array.isArray(gateway?.tools) ? gateway.tools : [];
+  const liveStatuses = Array.isArray(liveStatusQuery.data?.statuses) ? liveStatusQuery.data.statuses : [];
+  const bioTool = gatewayTools.find((tool) => tool.id === 'bio');
   const liveTools = useMemo(
     () =>
-      (liveStatusQuery.data?.statuses.filter((tool) => tool.id !== 'bio').slice(0, 4) ?? []).map(
+      liveStatuses.filter((tool) => tool.id !== 'bio').slice(0, 4).map(
         (tool) => ({
           ...tool,
-          name: gateway?.tools.find((entry: { id: string; name?: string }) => entry.id === tool.id)?.name ?? tool.id,
+          name: gatewayTools.find((entry: { id: string; name?: string }) => entry.id === tool.id)?.name ?? tool.id,
         }),
       ),
-    [liveStatusQuery.data?.statuses, gateway?.tools],
+    [liveStatuses, gatewayTools],
   );
-  const onlineTools = liveStatusQuery.data?.statuses.filter((tool) => tool.status === 'online').length ?? 0;
+  const onlineTools = liveStatuses.filter((tool) => tool.status === 'online').length;
   const isChecking = liveStatusQuery.isLoading || liveStatusQuery.isFetching;
   const [banner, setBanner] = useState<string | null>(null);
   const [bannerText, setBannerText] = useState<string | null>(null);
