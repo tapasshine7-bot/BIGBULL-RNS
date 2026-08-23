@@ -41,7 +41,7 @@ function decode(base64) {
   for (let index = 0; index < text.length; index += 1) bytes[index] = text.charCodeAt(index);
   return bytes;
 }
-function securityHeaders(type, isDocument) {
+function securityHeaders(type, isDocument, clearBrowserCache) {
   const headers = new Headers({
     'content-type': type,
     'x-content-type-options': 'nosniff',
@@ -52,6 +52,7 @@ function securityHeaders(type, isDocument) {
     'cache-control': isDocument ? 'no-store' : 'public, max-age=31536000, immutable',
   });
   if (isDocument) headers.set('content-security-policy', "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'");
+  if (clearBrowserCache) headers.set('clear-site-data', '"cache"');
   return headers;
 }
 export default {
@@ -61,8 +62,10 @@ export default {
     let key = url.pathname;
     if (key === '/control' || key === '/control/' || (key.startsWith('/control/') && !ASSETS[key])) key = '/control/index.html';
     const asset = ASSETS[key];
-    if (!asset) return new Response('Not found', { status: 404, headers: securityHeaders('text/plain; charset=utf-8', false) });
-    return new Response(request.method === 'HEAD' ? null : decode(asset.data), { headers: securityHeaders(asset.type, key.endsWith('.html')) });
+    if (!asset) return new Response('Not found', { status: 404, headers: securityHeaders('text/plain; charset=utf-8', false, false) });
+    const isDocument = key.endsWith('.html');
+    const clearBrowserCache = isDocument && url.searchParams.get('refresh') === '1';
+    return new Response(request.method === 'HEAD' ? null : decode(asset.data), { headers: securityHeaders(asset.type, isDocument, clearBrowserCache) });
   },
 };`;
 
