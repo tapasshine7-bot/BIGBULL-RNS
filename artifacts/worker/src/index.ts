@@ -4,6 +4,7 @@
 import { handleAdmin, handleBanner } from "./admin";
 import { FFTOOLS_SCHEMA, handleFfTools, recordStatusHistory } from "./fftools";
 import { TOOL_MANAGER_SCHEMA, toPublicTool, type ToolPlacement } from "./tool-manager";
+import { ownerControlPage } from "./owner-control-page";
 
 export interface Env {
   db: D1Database;
@@ -561,6 +562,17 @@ export default {
     const isPreview = env.PREVIEW_MODE === "true";
 
     try {
+      if (url.pathname === "/control" || url.pathname === "/control/") {
+        return new Response(ownerControlPage(), {
+          headers: {
+            "content-type": "text/html; charset=UTF-8",
+            "cache-control": "no-store",
+            "content-security-policy": "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+            "x-content-type-options": "nosniff",
+            "referrer-policy": "same-origin",
+          },
+        });
+      }
       if (isPreview) await ensurePreviewPublicSchema(env.db);
       if (path === "/healthz") return corsResponse(jsonResponse(200, { status: "ok" }), request);
       if (path === "/gateway") return corsResponse(await handleGateway(env.db, request, isPreview), request);
@@ -584,6 +596,7 @@ export default {
             username: env.ADMIN_USERNAME,
             password: env.ADMIN_PASSWORD,
             recovery: env.ADMIN_RECOVERY,
+            allowGeneratedRecovery: isPreview,
           }),
           request,
         );

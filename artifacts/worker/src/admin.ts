@@ -221,13 +221,26 @@ export interface AdminBootstrapSecrets {
   username?: string;
   password?: string;
   recovery?: string;
+  allowGeneratedRecovery?: boolean;
+}
+
+export function canBootstrapCredential(bootstrap: AdminBootstrapSecrets): boolean {
+  return Boolean(
+    bootstrap.username?.trim() &&
+      bootstrap.password?.trim() &&
+      (bootstrap.recovery?.trim() || bootstrap.allowGeneratedRecovery),
+  );
 }
 
 async function verifyPassword(db: D1Database, password: string, bootstrap: AdminBootstrapSecrets): Promise<boolean> {
   let cred = await readCredential(db);
   if (!cred) {
-    if (!bootstrap.username || !bootstrap.password || !bootstrap.recovery) return false;
-    await seedCredential(db, bootstrap.username, bootstrap.password, bootstrap.recovery);
+    if (!canBootstrapCredential(bootstrap)) return false;
+    // Preview deployments have no persistent owner data and use a separate D1 database.
+    // A generated recovery value lets the first password login initialize safely when
+    // the preview-only recovery binding is unavailable. Production must still supply it.
+    const recovery = bootstrap.recovery?.trim() || randomHex(32);
+    await seedCredential(db, bootstrap.username!.trim(), bootstrap.password!.trim(), recovery);
     cred = await readCredential(db);
     if (!cred) return false;
   }
