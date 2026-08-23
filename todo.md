@@ -40,3 +40,4 @@
 - [ ] Obtain the owner’s confirmation of a real on-page create, edit, hide/show, reorder, and permanent Remove test using the existing Admin session.
 - [x] Resolve the mobile browser cache or service-worker behavior that can show the previous Control Console without the Tool Manager tab at `/control`.
 - [x] Ensure the permanent normal URL `https://rnsbigbull.site/control` clears stale Control Console caches without requiring a query string.
+- [x] Run a non-destructive production stability check for public pages, the Control Console, Tool Manager, and protected Admin API behavior.

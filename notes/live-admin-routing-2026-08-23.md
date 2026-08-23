@@ -11,3 +11,7 @@ The root Pages site still serves a versioned service worker (`rvrsed-bigbull-v1`
 The separate Control Console Worker was updated in deployment `9cb20a29be8b4ff8980dd53c08629fb3` so the one-time URL `https://rnsbigbull.site/control?refresh=1` additionally returns `Clear-Site-Data: "cache"`. Browser validation of that exact URL showed the current native Control Console with the **Tool Manager** tab. This refresh target clears stale browser document/cache storage without changing the root service worker, public Pages routes, Admin credential, or API route.
 
 The Control Console was then updated again in deployment `c4ff62dc828243348f79ab40436046df` so the permanent normal URL `https://rnsbigbull.site/control` itself returns both `Cache-Control: no-store` and `Clear-Site-Data: "cache"`. Browser validation of that normal URL confirmed the visible **Tool Manager** tab with no query string required.
+
+## Non-destructive production stability check
+
+On 2026-08-23, the main page, Gateway, VIP Hub, Bio page, Control Console, and the public Gateway, VIP, Bio, and live-status API endpoints each returned HTTP 200. The unauthenticated Tool Manager API correctly returned HTTP 401, confirming that owner controls remained protected. The live Control Console rendered its overview and Tool Manager form plus existing tool table without browser-console output. Frontend and Worker type checks passed, along with 15 focused Tool Manager, CORS, Admin bootstrap, and owner-control regression tests. No Admin credentials, routes, or tool records were changed during this check.
