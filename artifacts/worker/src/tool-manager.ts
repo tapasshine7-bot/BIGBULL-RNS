@@ -22,8 +22,6 @@ export interface ToolInput {
   enabled: boolean;
 }
 
-const DISALLOWED_HOSTS = new Set(["ffpanels.in", "www.ffpanels.in"]);
-
 export const TOOL_MANAGER_SCHEMA = `CREATE TABLE IF NOT EXISTS managed_tools (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -48,7 +46,6 @@ function validateHttpsUrl(value: unknown, field: string, optional = false): { va
   try {
     const parsed = new URL(raw);
     if (parsed.protocol !== "https:") return { value: null, error: `${field} must use HTTPS` };
-    if (DISALLOWED_HOSTS.has(parsed.hostname.toLowerCase())) return { value: null, error: "This destination cannot be listed" };
     return { value: parsed.toString() };
   } catch {
     return { value: null, error: `${field} must be a valid HTTPS URL` };

@@ -52,8 +52,15 @@ describe("owner-managed tool validation", () => {
   it("rejects unsafe, malformed, and non-HTTPS destinations", () => {
     expect(validateToolInput({ name: "Invalid", url: "javascript:alert(1)" }).error).toContain("HTTPS");
     expect(validateToolInput({ name: "Invalid", url: "http://example.com" }).error).toContain("HTTPS");
-    expect(validateToolInput({ name: "Invalid", url: "https://ffpanels.in" }).error).toContain("cannot be listed");
     expect(validateToolInput({ name: "Invalid", url: "https://example.com", logoUrl: "not-a-url" }).error).toContain("Logo image link");
+  });
+
+  it("accepts the FF Panels HTTPS partner link", () => {
+    const result = validateToolInput({ name: "FF Panels", url: "https://ffpanels.in", placement: "vip" });
+
+    expect(result.error).toBeUndefined();
+    expect(result.input?.url).toBe("https://ffpanels.in/");
+    expect(result.input?.placement).toBe("vip");
   });
 
   it("keeps supported placement values bounded to the public dashboard or VIP Hub", () => {

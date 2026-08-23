@@ -186,6 +186,15 @@ export const PREVIEW_BASELINE_TOOL = {
   position: 10,
 };
 
+const VIP_PANEL_TOOL = {
+  id: "ffpanels",
+  name: "FF Panels",
+  url: "https://ffpanels.in",
+  description: "FF Panels partner tool.",
+  placement: "vip" as const,
+  position: 110,
+};
+
 async function ensurePreviewPublicSchema(db: D1Database): Promise<void> {
   await db.batch(PREVIEW_PUBLIC_SCHEMA.map((sql) => db.prepare(sql)));
 }
@@ -200,6 +209,20 @@ async function ensureManagedTools(db: D1Database, seedPreviewBaseline = false): 
     )
     .run()
     .catch(() => {});
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO managed_tools (id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+    )
+    .bind(
+      VIP_PANEL_TOOL.id,
+      VIP_PANEL_TOOL.name,
+      VIP_PANEL_TOOL.url,
+      VIP_PANEL_TOOL.description,
+      VIP_PANEL_TOOL.placement,
+      VIP_PANEL_TOOL.position,
+    )
+    .run();
   if (seedPreviewBaseline) {
     await db
       .prepare(
