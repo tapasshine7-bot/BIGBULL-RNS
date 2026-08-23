@@ -217,14 +217,17 @@ async function seedCredential(db: D1Database, username: string, password: string
     .run();
 }
 
-export const ADMIN_USERNAME = "Tapas123";
-export const ADMIN_PASSWORD = "Tapas@1234";
-export const ADMIN_RECOVERY = "rnsbull-1234";
+export interface AdminBootstrapSecrets {
+  username?: string;
+  password?: string;
+  recovery?: string;
+}
 
-async function verifyPassword(db: D1Database, password: string): Promise<boolean> {
+async function verifyPassword(db: D1Database, password: string, bootstrap: AdminBootstrapSecrets): Promise<boolean> {
   let cred = await readCredential(db);
   if (!cred) {
-    await seedCredential(db, ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_RECOVERY);
+    if (!bootstrap.username || !bootstrap.password || !bootstrap.recovery) return false;
+    await seedCredential(db, bootstrap.username, bootstrap.password, bootstrap.recovery);
     cred = await readCredential(db);
     if (!cred) return false;
   }
@@ -457,7 +460,12 @@ function safeJson(status: number, body: unknown, request: Request): Response {
   const resp = adminJson(status, body);
   // Admin endpoints are same-origin on production; mirror public CORS for dev hosts.
   const origin = request.headers.get("Origin") ?? "";
-  const allowed = ["https://rnsbigbull.site", "https://www.rnsbigbull.site", "https://rnsbigbull-site.pages.dev"];
+  const allowed = [
+    "https://rnsbigbull.site",
+    "https://www.rnsbigbull.site",
+    "https://rnsbigbull-site.pages.dev",
+    "https://tool-manager-preview.rnsbigbull-site.pages.dev",
+  ];
   if (allowed.includes(origin)) {
     resp.headers.set("access-control-allow-origin", origin);
     resp.headers.set("access-control-allow-headers", "content-type, x-admin-token");
@@ -493,7 +501,7 @@ function deviceFingerprint(request: Request): string {
   return isMobile ? "mobile-other" : "desktop-other";
 }
 
-export async function handleAdmin(db: D1Database, request: Request, path: string): Promise<Response> {
+export async function handleAdmin(db: D1Database, request: Request, path: string, bootstrap: AdminBootstrapSecrets = {}): Promise<Response> {
   await ensureSchema(db);
 
   const requiresAuth = path !== "/login" && path !== "/banner";
@@ -517,7 +525,7 @@ export async function handleAdmin(db: D1Database, request: Request, path: string
       const body = await request.json().catch(() => null);
       const password = String((body && (body as { password?: unknown }).password) ?? "");
       const recovery = String((body && (body as { recovery?: unknown }).recovery) ?? "");
-      const ok = password ? await verifyPassword(db, password) : recovery ? await verifyRecovery(db, recovery) : false;
+      const ok = password ? await verifyPassword(db, password, bootstrap) : recovery ? await verifyRecovery(db, recovery) : false;
       if (!ok) {
         await audit(db, "unknown", "admin.login.failed", "admin", { attempt: password ? "password" : "recovery" }, "warning");
         return safeJson(401, { ok: false, error: "Wrong password or recovery code" }, request);

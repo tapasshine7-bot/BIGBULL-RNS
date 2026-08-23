@@ -8,3 +8,16 @@
 - [x] Apply a CyberForge-inspired dark background refresh without reducing responsive readability or text contrast.
 - [x] Add focused authorization and validation tests, verify desktop and phone layouts, and record the frontend-only preview’s safe retry-state limitation.
 - [x] Commit and push the verified BigBull RNS Tool Manager source update to the authorized GitHub repository.
+- [x] Supersede the Tool Manager removal plan after the user requested that the feature be repaired instead.
+- [x] Preserve the pre-Tool-Manager dashboard behavior requirement as a regression baseline for the repair.
+- [x] Preserve the no-unsafe-cheat/mod-panel-link boundary while repairing the Tool Manager.
+- [x] Confirm that the previous Tool Manager source was pushed but not deployed, which is why the live site did not change.
+- [x] Restore the Tool Manager source and identify the separate live-deployment requirement that prevented it appearing for the user.
+- [x] Restore the owner-only Tool Manager and its normal-dashboard/VIP Hub public-card integration without weakening authorization or link safeguards.
+- [x] Validate the corrected frontend and Worker source; the working Tool Manager is already pushed to GitHub, and a live deployment is now required for it to appear on the website.
+- [x] Replace the direct-production deployment plan with the user-approved safer preview-first deployment approach.
+- [ ] Inspect the current Cloudflare deployment configuration and create a non-production preview of the already-pushed BigBull RNS Tool Manager source.
+- [ ] Validate the preview gateway, VIP Hub, authenticated admin access, and Tool Manager before requesting separate approval for any production change.
+- [ ] Configure a separate preview Worker, preview-only D1 database, and restricted Pages-preview CORS support so preview testing cannot change production data or traffic.
+- [ ] Replace embedded administrator bootstrap credentials with preview Worker secrets before deploying any publicly reachable preview environment.
+- [x] Make the empty isolated preview D1 database safe for public gateway, VIP Hub, Bio, and live-status requests without copying production or unsafe tool records.

@@ -2,11 +2,15 @@
 // Public endpoints are open (no payment system). Admin endpoints live under /api/admin.
 
 import { handleAdmin, handleBanner } from "./admin";
-import { handleFfTools, recordStatusHistory } from "./fftools";
+import { FFTOOLS_SCHEMA, handleFfTools, recordStatusHistory } from "./fftools";
 import { TOOL_MANAGER_SCHEMA, toPublicTool, type ToolPlacement } from "./tool-manager";
 
 export interface Env {
   db: D1Database;
+  ADMIN_USERNAME?: string;
+  ADMIN_PASSWORD?: string;
+  ADMIN_RECOVERY?: string;
+  PREVIEW_MODE?: string;
 }
 
 interface ToolRow {
@@ -34,7 +38,13 @@ interface Tool {
   logoUrl: string | null;
 }
 
-const ALLOWED_ORIGINS = ["https://rnsbigbull.site", "https://www.rnsbigbull.site", "https://rnsbigbull-site.pages.dev"];
+const ALLOWED_ORIGINS = [
+  "https://rnsbigbull.site",
+  "https://www.rnsbigbull.site",
+  "https://rnsbigbull-site.pages.dev",
+  // The only non-production frontend permitted to call the isolated preview API.
+  "https://tool-manager-preview.rnsbigbull-site.pages.dev",
+];
 
 function allowedOrigin(request: Request): string | null {
   const origin = request.headers.get("Origin") ?? "";
@@ -92,7 +102,88 @@ function toolToPublic(tool: ToolRow): Tool {
   });
 }
 
-async function ensureManagedTools(db: D1Database): Promise<void> {
+export const PREVIEW_PUBLIC_SCHEMA = [
+  TOOL_MANAGER_SCHEMA,
+  `CREATE TABLE IF NOT EXISTS visit_counters (
+     day TEXT NOT NULL,
+     path TEXT NOT NULL,
+     device TEXT NOT NULL,
+     requests INTEGER NOT NULL DEFAULT 1,
+     PRIMARY KEY (day, path, device)
+   )`,
+  `CREATE TABLE IF NOT EXISTS tool_ordering (
+     tool_id TEXT PRIMARY KEY,
+     position INTEGER NOT NULL DEFAULT 99,
+     updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS vip_blocks (
+     member_key TEXT PRIMARY KEY,
+     reason TEXT,
+     blocked_at TEXT NOT NULL,
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS vip_members (
+     member_key TEXT PRIMARY KEY,
+     display_name TEXT NOT NULL,
+     email TEXT,
+     status TEXT NOT NULL DEFAULT 'registered',
+     paid_at TEXT,
+     approved_at TEXT,
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS vip_payments (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     member_key TEXT NOT NULL,
+     display_name TEXT NOT NULL,
+     amount INTEGER NOT NULL DEFAULT 20,
+     status TEXT NOT NULL DEFAULT 'pending',
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS site_config (
+     key TEXT PRIMARY KEY,
+     value TEXT NOT NULL,
+     updated_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS announcements (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     title TEXT NOT NULL,
+     body TEXT,
+     severity TEXT NOT NULL DEFAULT 'info',
+     pinned INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT NOT NULL,
+     expires_at TEXT
+   )`,
+  `CREATE TABLE IF NOT EXISTS tool_requests (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     name TEXT NOT NULL,
+     detail TEXT,
+     contact TEXT,
+     status TEXT NOT NULL DEFAULT 'open',
+     created_at TEXT NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS uid_seed (
+     uid TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     region TEXT NOT NULL DEFAULT 'IND',
+     created_at TEXT NOT NULL
+   )`,
+  ...FFTOOLS_SCHEMA,
+];
+
+export const PREVIEW_BASELINE_TOOL = {
+  id: "bio",
+  name: "Bio Tool",
+  url: "https://rnsbigbull.site",
+  description: "Preview baseline. Update this owner-managed card to an approved Bio Tool destination before production.",
+  placement: "dashboard" as const,
+  position: 10,
+};
+
+async function ensurePreviewPublicSchema(db: D1Database): Promise<void> {
+  await db.batch(PREVIEW_PUBLIC_SCHEMA.map((sql) => db.prepare(sql)));
+}
+
+async function ensureManagedTools(db: D1Database, seedPreviewBaseline = false): Promise<void> {
   await db.prepare(TOOL_MANAGER_SCHEMA).run();
   await db
     .prepare(
@@ -102,10 +193,26 @@ async function ensureManagedTools(db: D1Database): Promise<void> {
     )
     .run()
     .catch(() => {});
+  if (seedPreviewBaseline) {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO managed_tools (id, name, url, logo_url, description, placement, enabled, position, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+      )
+      .bind(
+        PREVIEW_BASELINE_TOOL.id,
+        PREVIEW_BASELINE_TOOL.name,
+        PREVIEW_BASELINE_TOOL.url,
+        PREVIEW_BASELINE_TOOL.description,
+        PREVIEW_BASELINE_TOOL.placement,
+        PREVIEW_BASELINE_TOOL.position,
+      )
+      .run();
+  }
 }
 
-async function listTools(db: D1Database, placement?: ToolPlacement): Promise<ToolRow[]> {
-  await ensureManagedTools(db);
+async function listTools(db: D1Database, placement?: ToolPlacement, seedPreviewBaseline = false): Promise<ToolRow[]> {
+  await ensureManagedTools(db, seedPreviewBaseline);
   const base = placement
     ? db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position FROM managed_tools WHERE enabled = 1 AND placement = ? ORDER BY position, name").bind(placement)
     : db.prepare("SELECT id, name, url, logo_url, description, placement, enabled, position FROM managed_tools WHERE enabled = 1 ORDER BY placement, position, name");
@@ -200,9 +307,9 @@ function publicActivity(limit: number): { id: string; action: string; detail: st
 
 // ---- Route handlers --------------------------------------------------------
 
-async function handleGateway(db: D1Database, request: Request): Promise<Response> {
+async function handleGateway(db: D1Database, request: Request, seedPreviewBaseline = false): Promise<Response> {
   await recordPublicVisit(db, "/gateway", request);
-  const tools = await listTools(db, "dashboard");
+  const tools = await listTools(db, "dashboard", seedPreviewBaseline);
   const health = await probeAll(tools);
   // Live manual announcements posted from the admin panel.
   let recentActivity: { id: string; action: string; detail: string; createdAt: string }[] = [];
@@ -236,7 +343,7 @@ async function handleGateway(db: D1Database, request: Request): Promise<Response
   });
 }
 
-async function handleVipHub(db: D1Database, request: Request): Promise<Response> {
+async function handleVipHub(db: D1Database, request: Request, seedPreviewBaseline = false): Promise<Response> {
   await recordPublicVisit(db, "/vip", request);
   // VIP block enforcement: a blocked key loses access until it pays again.
   const hubKey = ((request.headers.get("x-member-key") ?? "") as string).trim().toUpperCase();
@@ -249,7 +356,7 @@ async function handleVipHub(db: D1Database, request: Request): Promise<Response>
       blockReason = block.reason ?? "Blocked by admin";
     }
   }
-  const tools = await reorderTools(db, await listTools(db, "vip"));
+  const tools = await reorderTools(db, await listTools(db, "vip", seedPreviewBaseline));
   const health = await probeAll(tools);
   const statusById = new Map(health.statuses.map((s) => [s.id, s.status]));
   return jsonResponse(200, {
@@ -266,17 +373,17 @@ async function handleVipHub(db: D1Database, request: Request): Promise<Response>
   });
 }
 
-async function handleBio(db: D1Database, request: Request): Promise<Response> {
+async function handleBio(db: D1Database, request: Request, seedPreviewBaseline = false): Promise<Response> {
   await recordPublicVisit(db, "/bio", request);
-  const tools = await listTools(db, "dashboard");
+  const tools = await listTools(db, "dashboard", seedPreviewBaseline);
   const bio = tools.find((tool) => tool.id === "bio");
-  if (!bio) return jsonResponse(500, { error: "Bio tool not configured." });
+  if (!bio) return jsonResponse(404, { error: "Bio Tool is not configured yet.", code: "BIO_TOOL_NOT_CONFIGURED" });
   return jsonResponse(200, toolToPublic(bio));
 }
 
-async function handleLiveStatus(db: D1Database, request: Request): Promise<Response> {
+async function handleLiveStatus(db: D1Database, request: Request, seedPreviewBaseline = false): Promise<Response> {
   await recordPublicVisit(db, "/live", request);
-  const tools = await listTools(db);
+  const tools = await listTools(db, undefined, seedPreviewBaseline);
   const health = await probeAll(tools);
   try {
     await recordStatusHistory(db, health.statuses);
@@ -445,13 +552,15 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname.replace(/^\/api/, "");
+    const isPreview = env.PREVIEW_MODE === "true";
 
     try {
+      if (isPreview) await ensurePreviewPublicSchema(env.db);
       if (path === "/healthz") return corsResponse(jsonResponse(200, { status: "ok" }), request);
-      if (path === "/gateway") return corsResponse(await handleGateway(env.db, request), request);
-      if (path === "/vip") return corsResponse(await handleVipHub(env.db, request), request);
-      if (path === "/bio") return corsResponse(await handleBio(env.db, request), request);
-      if (path === "/live-status") return corsResponse(await handleLiveStatus(env.db, request), request);
+      if (path === "/gateway") return corsResponse(await handleGateway(env.db, request, isPreview), request);
+      if (path === "/vip") return corsResponse(await handleVipHub(env.db, request, isPreview), request);
+      if (path === "/bio") return corsResponse(await handleBio(env.db, request, isPreview), request);
+      if (path === "/live-status") return corsResponse(await handleLiveStatus(env.db, request, isPreview), request);
       if (path === "/activity") return corsResponse(await handleActivity(env.db), request);
       if (path === "/tool-request") return corsResponse(await handleToolRequest(env.db, request), request);
       if (path === "/vip-member") return corsResponse(await handleVipMember(env.db, request), request);
@@ -463,7 +572,16 @@ export default {
         const ff = await handleFfTools(env.db, request, path);
         if (ff) return corsResponse(ff, request);
       }
-      if (path.startsWith("/admin")) return corsResponse(await handleAdmin(env.db, request, path.slice("/admin".length)), request);
+      if (path.startsWith("/admin")) {
+        return corsResponse(
+          await handleAdmin(env.db, request, path.slice("/admin".length), {
+            username: env.ADMIN_USERNAME,
+            password: env.ADMIN_PASSWORD,
+            recovery: env.ADMIN_RECOVERY,
+          }),
+          request,
+        );
+      }
       if (path === "/banner") return await handleBanner(env.db, request);
       return jsonResponse(404, { error: "Route not found" });
     } catch (error) {

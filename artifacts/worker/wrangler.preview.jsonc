@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bigbull-rns-api-toolmanager-preview",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-18",
+  "vars": {
+    "PREVIEW_MODE": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "bigbull-rns-toolmanager-preview-db",
+      "database_id": "0de0944e-d50e-4a8f-879f-22e6d77ffefb"
+    }
+  ]
+}
