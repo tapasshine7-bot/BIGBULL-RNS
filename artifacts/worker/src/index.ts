@@ -52,12 +52,17 @@ function allowedOrigin(request: Request): string | null {
   return ALLOWED_ORIGINS.includes(origin) ? origin : null;
 }
 
-function corsResponse(response: Response, request: Request): Response {
+export function corsResponse(response: Response, request: Request): Response {
   const origin = allowedOrigin(request);
   if (origin) {
     response.headers.set("access-control-allow-origin", origin);
     response.headers.set("access-control-allow-credentials", "true");
     response.headers.set("vary", "Origin");
+    if (request.method === "OPTIONS") {
+      response.headers.set("access-control-allow-methods", "GET, POST, DELETE, OPTIONS");
+      response.headers.set("access-control-allow-headers", "content-type, x-admin-token");
+      response.headers.set("access-control-max-age", "86400");
+    }
   }
   return response;
 }
