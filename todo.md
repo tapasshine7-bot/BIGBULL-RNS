@@ -16,13 +16,13 @@
 - [x] Restore the owner-only Tool Manager and its normal-dashboard/VIP Hub public-card integration without weakening authorization or link safeguards.
 - [x] Validate the corrected frontend and Worker source; the working Tool Manager is already pushed to GitHub, and a live deployment is now required for it to appear on the website.
 - [x] Replace the direct-production deployment plan with the user-approved safer preview-first deployment approach.
-- [ ] Inspect the current Cloudflare deployment configuration and create a non-production preview of the already-pushed BigBull RNS Tool Manager source.
+- [x] Inspect the current Cloudflare deployment configuration and create a non-production preview of the already-pushed BigBull RNS Tool Manager source.
 - [ ] Validate the preview gateway, VIP Hub, authenticated admin access, and Tool Manager before requesting separate approval for any production change.
-- [ ] Configure a separate preview Worker, preview-only D1 database, and restricted Pages-preview CORS support so preview testing cannot change production data or traffic.
+- [x] Configure a separate preview Worker, preview-only D1 database, and restricted Pages-preview CORS support so preview testing cannot change production data or traffic.
 - [ ] Replace embedded administrator bootstrap credentials with preview Worker secrets before deploying any publicly reachable preview environment.
 - [x] Make the empty isolated preview D1 database safe for public gateway, VIP Hub, Bio, and live-status requests without copying production or unsafe tool records.
-- [ ] Publish the validated preview frontend on an isolated Workers.dev hostname because the connected Pages asset-upload API cannot forward its required temporary JWT.
-- [ ] Verify that legitimate tools from any domain are accepted when both the destination and optional logo use HTTPS, while retaining the prohibited-destination blocklist.
-- [ ] Confirm that owner-entered partner links are not subject to a general domain whitelist, while retaining mandatory safety exclusions for prohibited destinations.
-- [ ] Confirm that arbitrary owner-entered legitimate partner names are accepted and displayed without a name-based blocklist.
-- [ ] Verify the final link policy: all normal HTTPS partner domains are accepted without a general whitelist, with only mandatory prohibited-destination exclusions retained.
+- [x] Publish the validated preview frontend on an isolated Workers.dev hostname because the connected Pages asset-upload API cannot forward its required temporary JWT.
+- [x] Verify that legitimate tools from any domain are accepted when both the destination and optional logo use HTTPS, while retaining the prohibited-destination blocklist.
+- [x] Confirm that owner-entered partner links are not subject to a general domain whitelist, while retaining mandatory safety exclusions for prohibited destinations.
+- [x] Confirm that arbitrary owner-entered legitimate partner names are accepted and displayed without a name-based blocklist.
+- [x] Verify the final link policy: all normal HTTPS partner domains are accepted without a general whitelist, with only mandatory prohibited-destination exclusions retained.
