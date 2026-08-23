@@ -17,21 +17,24 @@
 - [x] Validate the corrected frontend and Worker source; the working Tool Manager is already pushed to GitHub, and a live deployment is now required for it to appear on the website.
 - [x] Replace the direct-production deployment plan with the user-approved safer preview-first deployment approach.
 - [x] Inspect the current Cloudflare deployment configuration and create a non-production preview of the already-pushed BigBull RNS Tool Manager source.
-- [ ] Validate the preview gateway, VIP Hub, authenticated admin access, and Tool Manager before requesting separate approval for any production change.
+- [x] Validate the preview gateway, VIP Hub, authenticated admin access, and Tool Manager before requesting separate approval for any production change.
 - [x] Configure a separate preview Worker, preview-only D1 database, and restricted Pages-preview CORS support so preview testing cannot change production data or traffic.
-- [ ] Replace embedded administrator bootstrap credentials with preview Worker secrets before deploying any publicly reachable preview environment.
+- [x] Replace embedded administrator bootstrap credentials with preview Worker secrets before deploying any publicly reachable preview environment.
 - [x] Diagnose and repair the isolated preview Admin login network error reported from the preview gateway without changing the live site.
 - [x] Confirm that the isolated preview Admin form correctly submits the owner password; the secure login endpoint does not require a username entry.
-- [ ] Repair the isolated preview credential bootstrap when only the preview username and password secrets are available, without weakening the production login requirement.
+- [x] Repair the isolated preview credential bootstrap when only the preview username and password secrets are available, without weakening the production login requirement.
 - [x] Make the empty isolated preview D1 database safe for public gateway, VIP Hub, Bio, and live-status requests without copying production or unsafe tool records.
 - [x] Publish the validated preview frontend on an isolated Workers.dev hostname because the connected Pages asset-upload API cannot forward its required temporary JWT.
 - [x] Verify that legitimate tools from any domain are accepted when both the destination and optional logo use HTTPS, while retaining the prohibited-destination blocklist.
 - [x] Confirm that owner-entered partner links are not subject to a general domain whitelist, while retaining mandatory safety exclusions for prohibited destinations.
 - [x] Confirm that arbitrary owner-entered legitimate partner names are accepted and displayed without a name-based blocklist.
 - [x] Verify the final link policy: all normal HTTPS partner domains are accepted without a general whitelist, with only mandatory prohibited-destination exclusions retained.
-- [ ] Prepare the validated Tool Manager for the main BigBull RNS site only after the owner explicitly approves the isolated preview.
-- [ ] Confirm that the main-site Tool Manager retains a clear owner-only Remove/Delete Tool control for every managed tool card.
-- [ ] Deploy the preview-approved Tool Manager to the existing main BigBull RNS Admin panel without overwriting its established admin credentials.
-- [ ] Provide the production Tool Manager at a dedicated owner-only control route while the unchanged Pages frontend deployment remains unavailable through the connected API.
-- [ ] Route only `rnsbigbull.site/control*` to the approved production API Worker so the owner Tool Manager is available at the main-site control address without changing the public Pages frontend.
+- [x] Prepare the validated Tool Manager for the main BigBull RNS site only after the owner explicitly approves the isolated preview.
+- [x] Confirm that the main-site Tool Manager retains a clear owner-only Remove/Delete Tool control for every managed tool card.
+- [x] Deploy the preview-approved Tool Manager to the existing main BigBull RNS Admin panel without overwriting its established admin credentials.
+- [x] Provide the production Tool Manager at a dedicated owner-only Control Console route while the unchanged Pages frontend deployment remains unavailable through the connected API.
+- [x] Route only `rnsbigbull.site/control*` to the approved production Control Console Worker so the owner Tool Manager is available at the main-site control address without changing the public Pages frontend.
 - [x] Deliver one complete archive of the current BigBull RNS GitHub source and a verified list of public project URLs excluding the main RNS site.
+- [x] Integrate a visible Tool Manager tab or section into the existing main Admin dashboard shown by the owner, using the established Admin login without changing its credentials.
+- [x] Preserve the separate `/control` route only as a fallback until the in-dashboard Tool Manager has been visually validated on the live main site.
+- [ ] Obtain the owner’s confirmation of a real on-page create, edit, hide/show, reorder, and permanent Remove test using the existing Admin session.

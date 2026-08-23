@@ -30,6 +30,14 @@ The connected account interface can retrieve the required short-lived Pages uplo
 
 The public preview frontend is available only at `https://bigbull-rns-toolmanager-preview-site.tapasshine7.workers.dev`; it has no production custom-domain route and is marked `X-Robots-Tag: noindex, nofollow`. Its separate API is `https://bigbull-rns-api-toolmanager-preview.tapasshine7.workers.dev`, bound only to `bigbull-rns-toolmanager-preview-db`. Public Gateway bootstrap and exact-origin CORS were verified. Owner login and CRUD validation remain intentionally blocked until the owner configures new preview-only `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_RECOVERY` Worker secrets; these values must never be committed or copied from prior chat messages.
 
+## Corrected production Control Console rollout
+
+The production API Worker `bigbull-rns-api` remains on the existing `rnsbigbull.site/api/*` route. Its owner authentication remains backed by the already-existing production D1 credential record; it was not read, replaced, or changed.
+
+The narrow `rnsbigbull.site/control*` route (`fd59bc26e62e4f3796695a1cfc4299f5`) now targets a separate static Worker named `bigbull-rns-control-console` (deployment `e8132dd12f3440a9a32c3b82c330f5c4`). It serves the established **Control Console** visual experience at `/control`, not a replacement credential page. The dashboard visibly includes the native **Tool Manager** tab with add, edit, visibility, placement, reordering, and permanent Remove controls. It uses the existing same-origin `/api/admin` endpoints and therefore does not add a second credential or alter the main Admin login.
+
+Only `/control*` was switched. The public Pages frontend and routes such as `/gateway`, `/vip`, `/bio`, and the existing `/api/*` Worker route were not modified by this corrected deployment. The Control Console static route is marked noindex, embeds no credentials, and applies browser security headers.
+
 ## Reference
 
 [1]: https://developers.cloudflare.com/workers/configuration/routing/workers-dev/ "Cloudflare Workers Dev documentation"
