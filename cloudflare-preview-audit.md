@@ -26,6 +26,10 @@ The existing Pages project is an ad-hoc static deployment with no repository bui
 
 The connected account interface can retrieve the required short-lived Pages upload token, but it cannot forward arbitrary authorization headers to the Pages asset-store endpoints. The direct branch upload consequently returned authorization failure before creating any Pages deployment. The production Pages deployment and `rnsbigbull.site` were not changed. The isolated preview will instead use a separate Workers.dev static frontend hostname, with the API CORS allowlist limited to that one hostname.
 
+## Working isolated preview
+
+The public preview frontend is available only at `https://bigbull-rns-toolmanager-preview-site.tapasshine7.workers.dev`; it has no production custom-domain route and is marked `X-Robots-Tag: noindex, nofollow`. Its separate API is `https://bigbull-rns-api-toolmanager-preview.tapasshine7.workers.dev`, bound only to `bigbull-rns-toolmanager-preview-db`. Public Gateway bootstrap and exact-origin CORS were verified. Owner login and CRUD validation remain intentionally blocked until the owner configures new preview-only `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `ADMIN_RECOVERY` Worker secrets; these values must never be committed or copied from prior chat messages.
+
 ## Reference
 
 [1]: https://developers.cloudflare.com/workers/configuration/routing/workers-dev/ "Cloudflare Workers Dev documentation"
