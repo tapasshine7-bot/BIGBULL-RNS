@@ -64,7 +64,7 @@ export default {
     const asset = ASSETS[key];
     if (!asset) return new Response('Not found', { status: 404, headers: securityHeaders('text/plain; charset=utf-8', false, false) });
     const isDocument = key.endsWith('.html');
-    const clearBrowserCache = isDocument && url.searchParams.get('refresh') === '1';
+    const clearBrowserCache = isDocument;
     return new Response(request.method === 'HEAD' ? null : decode(asset.data), { headers: securityHeaders(asset.type, isDocument, clearBrowserCache) });
   },
 };`;

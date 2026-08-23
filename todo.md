@@ -39,3 +39,4 @@
 - [x] Preserve the separate `/control` route only as a fallback until the in-dashboard Tool Manager has been visually validated on the live main site.
 - [ ] Obtain the owner’s confirmation of a real on-page create, edit, hide/show, reorder, and permanent Remove test using the existing Admin session.
 - [x] Resolve the mobile browser cache or service-worker behavior that can show the previous Control Console without the Tool Manager tab at `/control`.
+- [x] Ensure the permanent normal URL `https://rnsbigbull.site/control` clears stale Control Console caches without requiring a query string.
