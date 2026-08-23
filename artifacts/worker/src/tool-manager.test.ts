@@ -23,6 +23,32 @@ describe("owner-managed tool validation", () => {
     });
   });
 
+  it("accepts a legitimate HTTPS destination and logo from arbitrary domains", () => {
+    const result = validateToolInput({
+      name: "Documentation Hub",
+      url: "https://developer.mozilla.org/en-US/docs/Web",
+      logoUrl: "https://images.example.org/branding/documentation-hub.svg",
+      description: "Reference material",
+      placement: "dashboard",
+      enabled: true,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.input?.url).toBe("https://developer.mozilla.org/en-US/docs/Web");
+    expect(result.input?.logoUrl).toBe("https://images.example.org/branding/documentation-hub.svg");
+  });
+
+  it("does not impose a name-based blocklist on legitimate partner cards", () => {
+    const result = validateToolInput({
+      name: "Dead Skull Hack",
+      url: "https://legitimate-partner.example/tools",
+      placement: "vip",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.input?.name).toBe("Dead Skull Hack");
+  });
+
   it("rejects unsafe, malformed, and non-HTTPS destinations", () => {
     expect(validateToolInput({ name: "Invalid", url: "javascript:alert(1)" }).error).toContain("HTTPS");
     expect(validateToolInput({ name: "Invalid", url: "http://example.com" }).error).toContain("HTTPS");

@@ -44,6 +44,7 @@ const ALLOWED_ORIGINS = [
   "https://rnsbigbull-site.pages.dev",
   // The only non-production frontend permitted to call the isolated preview API.
   "https://tool-manager-preview.rnsbigbull-site.pages.dev",
+  "https://bigbull-rns-toolmanager-preview-site.tapasshine7.workers.dev",
 ];
 
 function allowedOrigin(request: Request): string | null {

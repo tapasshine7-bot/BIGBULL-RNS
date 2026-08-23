@@ -465,6 +465,7 @@ function safeJson(status: number, body: unknown, request: Request): Response {
     "https://www.rnsbigbull.site",
     "https://rnsbigbull-site.pages.dev",
     "https://tool-manager-preview.rnsbigbull-site.pages.dev",
+    "https://bigbull-rns-toolmanager-preview-site.tapasshine7.workers.dev",
   ];
   if (allowed.includes(origin)) {
     resp.headers.set("access-control-allow-origin", origin);

@@ -20,6 +20,13 @@ The existing `rnsbigbull-site` Pages project has the production alias `https://r
 
 The preview Worker `bigbull-rns-api-toolmanager-preview` was created through the account API with exactly one D1 binding: the new preview database `bigbull-rns-toolmanager-preview-db` (`0de0944e-d50e-4a8f-879f-22e6d77ffefb`) and `PREVIEW_MODE=true`. It has no production route or production D1 binding. The apparent Workers.dev test URL returned Cloudflare 404 after upload, so the account-level Workers.dev exposure must be explicitly checked or enabled before it can become the preview API origin. Cloudflare documents that enabled Workers.dev URLs are public and can be protected with Access if needed. [1]
 
+## Pages preview deployment method
+
+The existing Pages project is an ad-hoc static deployment with no repository build configuration. A safe preview therefore requires a direct static-asset upload with branch metadata `tool-manager-preview`, rather than an update to its `main` production deployment. Cloudflare's Pages deployment API accepts a branch and a content manifest; the supported upload client first checks asset hashes, uploads only missing files, and then creates the branch deployment. [2]
+
+The connected account interface can retrieve the required short-lived Pages upload token, but it cannot forward arbitrary authorization headers to the Pages asset-store endpoints. The direct branch upload consequently returned authorization failure before creating any Pages deployment. The production Pages deployment and `rnsbigbull.site` were not changed. The isolated preview will instead use a separate Workers.dev static frontend hostname, with the API CORS allowlist limited to that one hostname.
+
 ## Reference
 
 [1]: https://developers.cloudflare.com/workers/configuration/routing/workers-dev/ "Cloudflare Workers Dev documentation"
+[2]: https://developers.cloudflare.com/workers/static-assets/direct-upload/ "Cloudflare static asset direct upload documentation"

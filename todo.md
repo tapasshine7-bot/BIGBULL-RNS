@@ -21,3 +21,8 @@
 - [ ] Configure a separate preview Worker, preview-only D1 database, and restricted Pages-preview CORS support so preview testing cannot change production data or traffic.
 - [ ] Replace embedded administrator bootstrap credentials with preview Worker secrets before deploying any publicly reachable preview environment.
 - [x] Make the empty isolated preview D1 database safe for public gateway, VIP Hub, Bio, and live-status requests without copying production or unsafe tool records.
+- [ ] Publish the validated preview frontend on an isolated Workers.dev hostname because the connected Pages asset-upload API cannot forward its required temporary JWT.
+- [ ] Verify that legitimate tools from any domain are accepted when both the destination and optional logo use HTTPS, while retaining the prohibited-destination blocklist.
+- [ ] Confirm that owner-entered partner links are not subject to a general domain whitelist, while retaining mandatory safety exclusions for prohibited destinations.
+- [ ] Confirm that arbitrary owner-entered legitimate partner names are accepted and displayed without a name-based blocklist.
+- [ ] Verify the final link policy: all normal HTTPS partner domains are accepted without a general whitelist, with only mandatory prohibited-destination exclusions retained.
