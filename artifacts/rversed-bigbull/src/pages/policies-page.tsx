@@ -34,7 +34,7 @@ export function PoliciesPage() {
           <h3>3. Third-party tools</h3>
           <p>The Site may link to external (&ldquo;partner&rdquo;) tools and websites. Those external services are operated by third parties and are subject to their own terms. We are not responsible for the content, availability, or behaviour of third-party services.</p>
           <h3>4. Content ownership</h3>
-          <p>All design, branding, logos, and original content on the Site are the property of RVRSED BIGBULL. You may not copy, redistribute, or resell any part of the Site without written permission.</p>
+          <p>All design, branding, logos, and original content on the Site are the property of REVANANCE. You may not copy, redistribute, or resell any part of the Site without written permission.</p>
           <h3>5. Changes to terms</h3>
           <p>We may update these terms at any time. Continued use of the Site after a change means you accept the revised terms. The &ldquo;Last updated&rdquo; date above reflects the most recent revision.</p>
         </Section>
@@ -58,7 +58,7 @@ export function PoliciesPage() {
           <h3>No guarantees</h3>
           <p>We do not guarantee uninterrupted availability, accuracy, or fitness of the Site or any linked tool for any particular purpose. Status indicators shown on the Site are informational only.</p>
           <h3>Not affiliated with third parties</h3>
-          <p>RVRSED BIGBULL is not affiliated with, endorsed by, or connected to any third-party platform or service linked from the Site. All trademarks mentioned belong to their respective owners.</p>
+          <p>REVANANCE is not affiliated with, endorsed by, or connected to any third-party platform or service linked from the Site. All trademarks mentioned belong to their respective owners.</p>
           <h3>Your responsibility</h3>
           <p>You are responsible for how you use any tool or output from the Site and for complying with the terms of any external service you use through it.</p>
           <h3>Limitation of liability</h3>

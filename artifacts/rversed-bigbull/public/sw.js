@@ -1,10 +1,8 @@
-// RVRSED BIGBULL service worker (offline-capable app shell).
-const CACHE_NAME = "rvrsed-bigbull-v1";
+// REVANANCE service worker (offline-capable app shell).
+const CACHE_NAME = "revanance-v1";
 const SHELL_URLS = [
   "/",
-  "/icon-192x192.png",
-  "/icon-512x512.png",
-  "/apple-touch-icon.png",
+  "/revanance-lion.png",
   "/manifest.json",
 ];
 

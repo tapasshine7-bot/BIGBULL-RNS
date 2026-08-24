@@ -98,7 +98,7 @@ export function NewsPage() {
 
       <div className="mt-5 flex items-start gap-2 border border-border bg-card/50 p-4 text-xs leading-6 text-muted-foreground">
         <Newspaper size={15} className="mt-0.5 shrink-0 text-accent" />
-        <span>Stories are curated by the RNS BIGBULL team. Tap a story to expand the full note.</span>
+        <span>Stories are curated by the REVANANCE team. Tap a story to expand the full note.</span>
       </div>
     </div>
   );

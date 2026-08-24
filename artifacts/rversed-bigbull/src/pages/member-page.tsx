@@ -135,7 +135,7 @@ export function MemberPage() {
         <div className="border border-border bg-card px-5 py-6">
           <div className="member-head">
             <KeyRound size={18} className="text-accent" />
-            <h1 className="text-display text-xl font-bold uppercase tracking-tight">Join RVRSED BIGBULL</h1>
+            <h1 className="text-display text-xl font-bold uppercase tracking-tight">Join REVANANCE</h1>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             One-time name entry gets you a unique lifetime key. No login, no password, no account — just your key.

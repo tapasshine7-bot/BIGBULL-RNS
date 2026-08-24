@@ -19,7 +19,7 @@ export function ActivityPage() {
       <PageHeading
       eyebrow="Player activity / session ledger"
       title="Activity."
-      detail="A clean record of public system events from your RVRSED BIGBULL gateway."
+      detail="A clean record of public system events from your REVANANCE gateway."
       action={<div className="flex items-center gap-2 text-mono text-[10px] uppercase tracking-wider text-accent"><Activity size={14} /> {query.data.length} events</div>}
     />
     {query.data.length === 0 ? <EmptyState title="No activity yet" detail="System events will appear here as the network reports them." /> : <div className="activity-ledger">

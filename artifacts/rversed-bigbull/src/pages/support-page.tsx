@@ -29,7 +29,7 @@ export function SupportPage() {
         <div>
           <div className="text-mono text-[9px] uppercase tracking-[.28em] text-muted-foreground">Helpdesk</div>
           <h1 className="mt-1 text-3xl font-bold md:text-4xl">Support</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Reach the RVRSED BIGBULL team directly.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Reach the REVANANCE team directly.</p>
         </div>
         <span className="border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-mono text-[9px] uppercase tracking-[.18em] text-accent">24×7 helpdesk</span>
       </div>
@@ -77,7 +77,7 @@ export function SupportPage() {
         </div>
       </section>
 
-      <p className="mt-5 text-center text-[11px] text-muted-foreground">RVRSED BIGBULL · helpdesk · no login required · lifetime VIP keys</p>
+      <p className="mt-5 text-center text-[11px] text-muted-foreground">REVANANCE · helpdesk · no login required · lifetime VIP keys</p>
     </div>
   );
 }

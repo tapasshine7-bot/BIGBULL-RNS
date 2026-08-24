@@ -391,7 +391,7 @@ export function GatewayPage() {
         <article key={tool.id} className="dashboard-feature-card dashboard-managed-card" data-testid={`dashboard-managed-${tool.id}`}>
           <div className="dashboard-card-copy">
             <div className="dashboard-card-title-row"><h2>{tool.name}</h2><span className="dashboard-free-tag">TOOL</span></div>
-            <p>{tool.description || 'Owner-approved tool available from RNS BIGBULL.'}</p>
+            <p>{tool.description || 'Owner-approved tool available from REVANANCE.'}</p>
             <a href={tool.url} target="_blank" rel="noopener noreferrer" className="dashboard-action dashboard-action-purple"><span>Open {tool.name}</span><span aria-hidden="true">→</span></a>
           </div>
           <div className="dashboard-card-art dashboard-managed-art" aria-hidden="true">
@@ -426,7 +426,7 @@ export function GatewayPage() {
       <div className="dashboard-install-inner">
         <div>
           <div className="dashboard-install-label"><Smartphone size={13} strokeWidth={1.8} /><span>Install as app</span></div>
-          <p className="dashboard-install-desc">Add RVRSED BIGBULL to your home screen and open it like a real app — full screen, no browser bar.</p>
+          <p className="dashboard-install-desc">Add REVANANCE to your home screen and open it like a real app — full screen, no browser bar.</p>
           <InstallAppRow />
         </div>
         <div className="dashboard-install-art" aria-hidden="true"><span>♛</span></div>

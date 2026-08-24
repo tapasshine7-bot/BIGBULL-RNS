@@ -205,7 +205,7 @@ export function StartupPage() {
               </div>
             </div>
             <div className="mb-10 text-display text-4xl font-bold uppercase tracking-[.18em] sm:text-5xl">
-              <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">RNS BIGBULL</span>
+              <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">REVANANCE</span>
             </div>
             <div className="mx-auto mb-8 grid max-w-[380px] place-items-center border border-accent/30 bg-card/40 p-5 backdrop-blur-sm panel-edge">
               <div className="space-y-2.5 text-left">
@@ -312,7 +312,7 @@ export function StartupPage() {
           <div className="mb-8 flex items-center justify-between border-b border-border pb-5">
             <div>
               <div className="text-mono text-[10px] uppercase tracking-[.2em] text-primary">Boot protocol</div>
-              <div className="mt-2 text-display text-3xl uppercase tracking-widest">RVRSED BIGBULL</div>
+              <div className="mt-2 text-display text-3xl uppercase tracking-widest">REVANANCE</div>
             </div>
             <div className="relative grid h-14 w-14 place-items-center border border-accent/40 text-accent">
               <Radio size={22} className="signal-pulse" />
