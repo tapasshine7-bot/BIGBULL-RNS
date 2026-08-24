@@ -1017,15 +1017,85 @@ html.vip-dark-mode body {
   height: 7rem;
   width: 7rem;
   transform: translate(2rem, -2rem) rotate(45deg);
-  opacity: .5;
+  opacity: .24;
   transition: opacity .2s;
 }
-.group:hover .partner-card-glow { opacity: .85; }
+.group:hover .partner-card-glow { opacity: .42; }
 .partner-glow-gold { border: 1px solid rgba(245, 197, 66, .25); background: radial-gradient(circle at center, rgba(245, 197, 66, .12), transparent 70%); }
 .partner-glow-blue { border: 1px solid rgba(125, 211, 252, .25); background: radial-gradient(circle at center, rgba(125, 211, 252, .12), transparent 70%); }
 .partner-glow-green { border: 1px solid rgba(139, 242, 164, .25); background: radial-gradient(circle at center, rgba(139, 242, 164, .12), transparent 70%); }
 .partner-glow-pink { border: 1px solid rgba(249, 168, 212, .25); background: radial-gradient(circle at center, rgba(249, 168, 212, .12), transparent 70%); }
 .partner-glow-purple { border: 1px solid rgba(196, 181, 253, .25); background: radial-gradient(circle at center, rgba(196, 181, 253, .12), transparent 70%); }
+.partner-card-compact { min-height: 15.5rem; box-shadow: 0 14px 36px rgba(0, 0, 0, .18); }
+.partner-card-compact .partner-icon { width: 2.7rem; height: 2.7rem; border-radius: .5rem; }
+.partner-card-compact .partner-icon img { width: 1.45rem; height: 1.45rem; }
+.partner-card-compact .partner-launch { min-height: 2.25rem; }
+
+/* Compact premium owners display — public dashboard only. */
+.dashboard-owners-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 62rem;
+  margin: 1rem auto 0;
+  overflow: hidden;
+  border: 1px solid rgba(122, 255, 174, .26);
+  border-radius: .75rem;
+  background: linear-gradient(105deg, rgba(10, 35, 28, .9), rgba(8, 20, 18, .96) 58%, rgba(73, 58, 16, .17));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .045);
+  padding: .9rem 1rem;
+}
+.dashboard-owners-orbit {
+  position: absolute;
+  right: -4rem;
+  top: -4.5rem;
+  width: 11rem;
+  height: 11rem;
+  border: 1px solid rgba(122, 255, 174, .14);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.2rem rgba(122, 255, 174, .035), 0 0 2.5rem rgba(34, 197, 94, .12);
+}
+.dashboard-owners-icon {
+  display: grid;
+  width: 2.55rem;
+  height: 2.55rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(250, 204, 21, .44);
+  border-radius: .6rem;
+  background: rgba(250, 204, 21, .08);
+  color: rgb(253, 224, 71);
+}
+.dashboard-owners-names {
+  margin: .1rem 0 0;
+  color: #e9fff0;
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 3vw, 1.25rem);
+  font-weight: 700;
+  letter-spacing: .12em;
+  line-height: 1.1;
+}
+.dashboard-owners-names span { color: rgb(253, 224, 71); padding: 0 .15em; }
+.dashboard-owners-status {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  color: rgba(206, 255, 222, .7);
+  font-family: var(--app-font-mono);
+  font-size: .56rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.dashboard-owners-status span { width: .42rem; height: .42rem; border-radius: 999px; background: #58f38a; box-shadow: 0 0 .8rem #58f38a; }
+@media (max-width: 520px) {
+  .dashboard-owners-panel { align-items: flex-start; padding: .85rem .9rem; }
+  .dashboard-owners-status { font-size: .5rem; letter-spacing: .09em; }
+  .partner-card-compact { min-height: 14.5rem; }
+}
 
 /* Emergency VIP key restore — below the dashboard cards */
 .gateway-restore-row { margin: 0 auto; width: 100%; max-width: 62rem; padding: 0 1rem; grid-column: 1 / -1; }

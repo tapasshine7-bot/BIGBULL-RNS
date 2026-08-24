@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Activity, Atom, Bell, Check, ChevronRight, Download, History, LoaderCircle, Megaphone, ShieldCheck, Smartphone, Wrench } from 'lucide-react';
+import { Activity, Atom, Bell, Check, ChevronRight, Crown, Download, History, LoaderCircle, Megaphone, ShieldCheck, Smartphone, Wrench } from 'lucide-react';
 import { useInstallPrompt, useIsStandalone } from '@/hooks/use-install-prompt';
 import { getGetGatewayQueryKey, getGetLiveStatusQueryKey, useGetGateway, useGetLiveStatus } from '@workspace/api-client-react';
 import { Link } from 'wouter';
@@ -420,6 +420,18 @@ export function GatewayPage() {
           </button>
         )}
       </div>
+    </section>
+
+    <section className="dashboard-owners-panel" aria-label="Site owners" data-testid="dashboard-owners-panel">
+      <div className="dashboard-owners-orbit" aria-hidden="true" />
+      <div className="relative flex min-w-0 items-center gap-3">
+        <span className="dashboard-owners-icon"><Crown size={18} strokeWidth={1.7} /></span>
+        <div>
+          <div className="dashboard-section-label">Owners</div>
+          <p className="dashboard-owners-names">REIGN <span aria-hidden="true">×</span> EVANN</p>
+        </div>
+      </div>
+      <div className="dashboard-owners-status"><span /> Official management</div>
     </section>
 
     <section className="dashboard-install-section" aria-label="Install app">

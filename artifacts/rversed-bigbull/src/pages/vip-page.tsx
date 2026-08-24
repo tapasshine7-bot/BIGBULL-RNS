@@ -332,7 +332,7 @@ function VipHubInner({
           {dark ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
-      {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : filtered.length === 0 ? <div className="border border-border bg-card p-8 text-center text-sm text-muted-foreground">No tools match “{search.trim()}”.</div> : <div className="grid gap-4 md:grid-cols-2">{filtered.map((tool, index) => <PartnerCard key={tool.id} tool={tool} index={index} />)}</div>}
+      {tools.length === 0 ? <EmptyState title="No partner nodes" detail="The network is quiet right now. Retry when the partner registry is back online." /> : filtered.length === 0 ? <div className="border border-border bg-card p-8 text-center text-sm text-muted-foreground">No tools match “{search.trim()}”.</div> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filtered.map((tool, index) => <PartnerCard key={tool.id} tool={tool} index={index} />)}</div>}
       <div className="mt-8 flex items-center gap-3 text-xs text-muted-foreground"><ExternalLink size={14} className="text-accent" /> Partner tools open outside the gateway. The gateway remains available here.</div>
 
       <GuideCardsSection />
@@ -429,7 +429,7 @@ function PartnerCard({ tool, index }: { tool: { id: string; name: string; descri
   const meta = TOOL_META[tool.id] ?? TOOL_META['default'];
   const Icon = meta.icon;
   return (
-    <article className={`partner-card group relative overflow-hidden border border-border bg-card p-6 panel-edge transition hover:-translate-y-1 hover:border-primary/45 ${index === 0 ? 'md:row-span-2 md:p-8' : ''}`}>
+    <article className="partner-card partner-card-compact group relative overflow-hidden border border-border bg-card p-4 panel-edge transition hover:-translate-y-0.5 hover:border-primary/45">
       <div className={`partner-card-glow partner-glow-${meta.accent}`} aria-hidden="true" />
       <div className="relative flex h-full flex-col">
         <div className="flex items-start justify-between">
@@ -438,15 +438,15 @@ function PartnerCard({ tool, index }: { tool: { id: string; name: string; descri
           </div>
           <StatusPill status={tool.status as 'online' | 'checking' | 'warning' | 'offline'} />
         </div>
-        <div className="mt-7 flex-1">
-          <div className="text-mono mb-2 text-[9px] uppercase tracking-[.2em] text-muted-foreground">Node {String(index + 1).padStart(2, '0')} / {tool.category}</div>
+        <div className="mt-5 flex-1">
+          <div className="text-mono mb-1.5 text-[8px] uppercase tracking-[.18em] text-muted-foreground">Node {String(index + 1).padStart(2, '0')} / {tool.category}</div>
           <div className="flex items-center gap-2">
-            <h2 className="text-display text-3xl uppercase tracking-wider">{tool.name}</h2>
+            <h2 className="text-display text-xl uppercase tracking-wider sm:text-2xl">{tool.name}</h2>
             <span className={`partner-badge partner-badge-${meta.accent}`}>{meta.badge}</span>
           </div>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">{tool.description}</p>
+          <p className="mt-2.5 max-w-sm text-[13px] leading-5 text-muted-foreground">{tool.description}</p>
         </div>
-        <div className="mt-8 flex items-center justify-between border-t border-border pt-4">
+        <div className="mt-5 flex items-center justify-between border-t border-border pt-3">
           <div className="text-mono max-w-[190px] truncate text-[9px] text-muted-foreground">{tool.url}</div>
           <a href={tool.url} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-bold text-primary-foreground transition hover:brightness-110 active:translate-y-px partner-launch partner-launch-${meta.accent}`} data-testid={`button-launch-${tool.id}`}>
             <span>Launch</span><ArrowUpRight size={14} />
